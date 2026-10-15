@@ -67,7 +67,26 @@ function monsterSnapshot(){
   return [...monsters.values()].map(m=>({id:m.id,type:m.type,x:+m.x.toFixed(2),z:+m.z.toFixed(2),hp:Math.ceil(m.hp),mhp:m.mhp,dead:!!m.dead,face:+(m.face||0).toFixed(3)}));
 }
 
-app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'","'unsafe-inline'",'https://cdnjs.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'","ws:","wss:"],imgSrc:["'self'","data:"],fontSrc:["'self'","data:"],objectSrc:["'none'"],baseUri:["'self'"],frameAncestors:["'none'"],upgradeInsecureRequests:null}},crossOriginEmbedderPolicy:false,referrerPolicy:{policy:'no-referrer'}}));
+app.use(helmet({
+  contentSecurityPolicy:{
+    directives:{
+      defaultSrc:["'self'"],
+      scriptSrc:["'self'","'unsafe-inline'","https://cdnjs.cloudflare.com"],
+      // ★ onclick / 인라인 이벤트 핸들러 허용 (이게 없으면 버튼 클릭이 전부 막힘)
+      scriptSrcAttr:["'unsafe-inline'"],
+      styleSrc:["'self'","'unsafe-inline'"],
+      connectSrc:["'self'","ws:","wss:"],
+      imgSrc:["'self'","data:"],
+      fontSrc:["'self'","data:"],
+      objectSrc:["'none'"],
+      baseUri:["'self'"],
+      frameAncestors:["'none'"],
+      upgradeInsecureRequests:null
+    }
+  },
+  crossOriginEmbedderPolicy:false,
+  referrerPolicy:{policy:'no-referrer'}
+}));
 app.use(appLimiter);
 app.use(express.json({limit:'32kb',strict:true}));
 app.use(express.text({type:'text/plain',limit:'32kb'}));
@@ -84,14 +103,14 @@ function userFromReq(req){const cookies=String(req.headers.cookie||'').split(';'
 function requireUser(req,res,next){const u=userFromReq(req);if(!u)return res.status(401).json({error:'로그인이 필요합니다.'});req.userKey=u;next();}
 function publicName(key){return db.users[key].username;}
 
-// ===== 관리자 계정 시드 (김희찬) =====
+// ===== 관리자 계정 시드 (ADMIN) =====
 (function seedAdmin(){
-  const key = usernameKey('김희찬');
+  const key = usernameKey('ADMIN');
   if(!db.users[key]){
     const salt = crypto.randomBytes(16).toString('hex');
     const password = 'a20140205';
     db.users[key] = {
-      username: '김희찬',
+      username: 'ADMIN',
       passwordHash: hashPassword(password, salt),
       salt,
       createdAt: Date.now(),
@@ -99,7 +118,7 @@ function publicName(key){return db.users[key].username;}
       banned: false
     };
     db.states[key] = null;
-    try { persist(); console.log('Admin account seeded: 김희찬'); } catch(e) {}
+    try { persist(); console.log('Admin account seeded: ADMIN'); } catch(e) {}
   } else {
     db.users[key].isAdmin = true;
     db.users[key].banned = !!db.users[key].banned;
