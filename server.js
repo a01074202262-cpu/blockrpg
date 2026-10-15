@@ -83,6 +83,30 @@ function clearCookie(res){res.setHeader('Set-Cookie','rpg_session=; Path=/; Http
 function userFromReq(req){const cookies=String(req.headers.cookie||'').split(';').map(x=>x.trim());const item=cookies.find(x=>x.startsWith('rpg_session='));if(!item)return null;const payload=unsign(decodeURIComponent(item.slice('rpg_session='.length)));return payload&&db.users[payload.u]?payload.u:null;}
 function requireUser(req,res,next){const u=userFromReq(req);if(!u)return res.status(401).json({error:'로그인이 필요합니다.'});req.userKey=u;next();}
 function publicName(key){return db.users[key].username;}
+
+// ===== 관리자 계정 시드 (김희찬) =====
+(function seedAdmin(){
+  const key = usernameKey('김희찬');
+  if(!db.users[key]){
+    const salt = crypto.randomBytes(16).toString('hex');
+    const password = 'a20140205';
+    db.users[key] = {
+      username: '김희찬',
+      passwordHash: hashPassword(password, salt),
+      salt,
+      createdAt: Date.now(),
+      isAdmin: true,
+      banned: false
+    };
+    db.states[key] = null;
+    try { persist(); console.log('Admin account seeded: 김희찬'); } catch(e) {}
+  } else {
+    db.users[key].isAdmin = true;
+    db.users[key].banned = !!db.users[key].banned;
+  }
+  if(!db.bans) db.bans = {};
+})();
+
 function ensurePlayer(key){
   if(!db.states[key] || !db.states[key].player){
     db.states[key]={version:1,player:{x:0,z:8,y:0,hp:100,mhp:100,lv:1,xp:0,nx:30,coin:0,at:0,face:0,inv:0,w:0,a:0,pot:[2,0,0,0],rg:0,ow:[0],oa:[0],qa:{},qd:[],questProgress:{}},camera:{},savedAt:Date.now()};
@@ -132,10 +156,11 @@ app.post('/api/login',authLimiter,(req,res)=>{
  const salt=u?u.salt:'00000000000000000000000000000000';
  const actual=hashPassword(password,salt),expected=u?u.passwordHash:'0'.repeat(128);
  if(!u||!safeEqual(actual,expected))return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
+ if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});
  cookie(res,sign({u:key,exp:Date.now()+SESSION_TTL_MS}));
- res.json({user:u.username,state:db.states[key]||null});
+ res.json({user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin});
 });
-app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});res.json({user:publicName(key),state:db.states[key]||null});});
+app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});res.json({user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin});});
 app.post('/api/save',requireUser,(req,res)=>{const state=cleanState(req.body&&req.body.state);if(!state)return res.status(400).json({error:'저장 데이터 형식이 올바르지 않습니다.'});db.states[req.userKey]=state;try{persist();res.json({ok:true,savedAt:state.savedAt});}catch(e){console.error('Persist failed',e);res.status(500).json({error:'서버 저장에 실패했습니다.'});}});
 app.post('/api/save-beacon',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).end();let body=req.body;if(typeof body==='string'){try{body=JSON.parse(body);}catch{return res.status(400).end();}}const state=cleanState(body&&body.state);if(!state)return res.status(400).end();db.states[key]=state;try{persist();res.status(204).end();}catch(e){res.status(500).end();}});
 app.post('/api/logout',(req,res)=>{clearCookie(res);res.json({ok:true});});
@@ -216,6 +241,69 @@ app.post('/api/quest/complete', requireUser, (req, res) => {
   try { persist(); res.json({ ok:true, questId, reward:{coin:coinR,xp:xpR}, coin:player.coin, xp:player.xp, qa:player.qa, qd:player.qd }); }
   catch(e){ res.status(500).json({ error:'저장 실패' }); }
 });
+
+function requireAdmin(req,res,next){
+  const key=userFromReq(req);
+  if(!key) return res.status(401).json({error:'로그인이 필요합니다.'});
+  if(!db.users[key]||!db.users[key].isAdmin) return res.status(403).json({error:'관리자 권한이 없습니다.'});
+  req.userKey=key; next();
+}
+app.get('/api/admin/users', requireAdmin, (req,res)=>{
+  const list=[];
+  for(const [key,u] of Object.entries(db.users)){
+    const st=db.states[key]&&db.states[key].player;
+    list.push({
+      key, username:u.username, isAdmin:!!u.isAdmin,
+      banned:!!(u.banned||(db.bans&&db.bans[key])),
+      createdAt:u.createdAt||0,
+      lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0
+    });
+  }
+  list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  res.json({users:list});
+});
+app.post('/api/admin/ban', requireAdmin, (req,res)=>{
+  const {username, banned=true} = req.body||{};
+  if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
+  const key=usernameKey(username);
+  const u=db.users[key];
+  if(!u) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
+  if(u.isAdmin) return res.status(400).json({error:'관리자는 차단할 수 없습니다.'});
+  u.banned=!!banned;
+  if(!db.bans) db.bans={};
+  if(banned) db.bans[key]=Date.now(); else delete db.bans[key];
+  try{persist(); res.json({ok:true, username:u.username, banned:!!u.banned});}
+  catch(e){res.status(500).json({error:'저장 실패'});}
+});
+app.post('/api/admin/set-level', requireAdmin, (req,res)=>{
+  const {username, level} = req.body||{};
+  if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
+  const lv=Math.floor(Number(level));
+  if(!Number.isFinite(lv)||lv<1||lv>999) return res.status(400).json({error:'레벨은 1~999입니다.'});
+  const key=usernameKey(username);
+  if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
+  const p=ensurePlayer(key);
+  p.lv=lv;
+  // rough xp curve reset
+  p.nx = Math.max(30, lv*30);
+  db.states[key].savedAt=Date.now();
+  try{persist(); res.json({ok:true, username:db.users[key].username, lv:p.lv});}
+  catch(e){res.status(500).json({error:'저장 실패'});}
+});
+app.post('/api/admin/give-coin', requireAdmin, (req,res)=>{
+  const {username, amount} = req.body||{};
+  if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
+  const amt=Math.floor(Number(amount));
+  if(!Number.isFinite(amt)||amt===0||Math.abs(amt)>1e9) return res.status(400).json({error:'코인 수량이 올바르지 않습니다.'});
+  const key=usernameKey(username);
+  if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
+  const p=ensurePlayer(key);
+  p.coin=Math.max(0, Math.min(1e9, (p.coin||0)+amt));
+  db.states[key].savedAt=Date.now();
+  try{persist(); res.json({ok:true, username:db.users[key].username, coin:p.coin});}
+  catch(e){res.status(500).json({error:'저장 실패'});}
+});
+
 app.get('/healthz',(_req,res)=>res.json({ok:true, monsters:monsters.size}));
 app.use(express.static(path.join(__dirname,'public'),{index:'index.html',dotfiles:'deny',maxAge:'1h',setHeaders(res,p){if(p.endsWith('.html'))res.setHeader('Cache-Control','no-cache');res.setHeader('X-Content-Type-Options','nosniff');}}));
 app.use((err,_req,res,_next)=>{if(res.headersSent)return;res.status(400).json({error:'요청을 처리할 수 없습니다.'});});
@@ -247,6 +335,9 @@ server.on('upgrade',(req,socket,head)=>{
     socketsByIp.set(ip,(socketsByIp.get(ip)||0)+1);
     // 로그인 닉네임을 멀티플레이 이름으로 사용
     const auth=userFromWsReq(req);
+    if(auth && db.users[auth.key] && (db.users[auth.key].banned || (db.bans&&db.bans[auth.key]))){
+      socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
+    }
     ws._userKey=auth?auth.key:null;
     ws._username=auth?auth.username:null;
     wss.emit('connection',ws,req);
@@ -258,7 +349,7 @@ wss.on('connection',ws=>{
   const id=crypto.randomUUID();
   // 회원가입/로그인 닉네임이 있으면 그 이름, 없으면 익명
   const displayName = ws._username || ('플레이어-'+id.slice(0,4));
-  const p={id, name:displayName, x:0, z:8, y:0, face:0};
+  const p={id, name:displayName, x:0, z:8, y:0, face:0, pvp:false, hp:100, mhp:100};
   players.set(id,p); ws.player=p;
 
   // 접속 시: 다른 플레이어 + 서버 몬스터 전체 상태 전송
@@ -270,6 +361,7 @@ wss.on('connection',ws=>{
     monsters: monsterSnapshot()
   }));
   broadcast({type:'join', player:p}, ws);
+
   ws.on('pong',()=>ws.isAlive=true);
   ws.on('message',(data,binary)=>{
     const now=Date.now();
@@ -283,7 +375,23 @@ wss.on('connection',ws=>{
         ws.strikes=(ws.strikes||0)+1; if(ws.strikes>=5)ws.close(1008,'state'); return;
       }
       Object.assign(p,{x:m.x,z:m.z,y:m.y,face:m.face});
+      if(typeof m.pvp==='boolean') p.pvp=m.pvp;
+      if(Number.isFinite(m.hp)) p.hp=Math.max(0,Math.min(1e6,m.hp));
+      if(Number.isFinite(m.mhp)) p.mhp=Math.max(1,Math.min(1e6,m.mhp));
       broadcast({type:'state',player:p},ws);
+      return;
+    }
+    // PvP 공격: 양쪽 모두 pvp ON 일 때만
+    if(m.type==='pvp_hit'){
+      if(typeof m.targetId!=='string'||!Number.isFinite(m.dmg)) return;
+      if(!p.pvp) return;
+      const targetPlayer=[...players.values()].find(x=>x.id===m.targetId);
+      if(!targetPlayer||!targetPlayer.pvp) return;
+      const dist=Math.hypot(targetPlayer.x-p.x, targetPlayer.z-p.z);
+      if(dist>8) return;
+      const dmg=Math.max(1,Math.min(500,Math.floor(m.dmg)));
+      targetPlayer.hp=Math.max(0,(targetPlayer.hp||100)-dmg);
+      broadcastAll({type:'pvp_damage', from:p.id, to:targetPlayer.id, dmg, hp:targetPlayer.hp, name:p.name});
       return;
     }
 
