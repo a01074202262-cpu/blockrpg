@@ -174,7 +174,7 @@ app.post('/api/buy', requireUser, (req, res) => {
 
 app.post('/api/quest/accept', requireUser, (req, res) => {
   const { questId } = req.body || {};
-  if (typeof questId !== 'string' || !QUESTS[questId]) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  if (typeof questId !== 'string' || !/^[A-Za-z0-9_-]{1,24}$/.test(questId)) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
   const player = ensurePlayer(req.userKey);
   if (player.qd.includes(questId)) return res.status(400).json({ error: '이미 완료한 퀘스트입니다.' });
   if (player.qa[questId] !== undefined) return res.status(400).json({ error: '이미 수락한 퀘스트입니다.' });
@@ -185,32 +185,37 @@ app.post('/api/quest/accept', requireUser, (req, res) => {
 });
 app.post('/api/quest/progress', requireUser, (req, res) => {
   const { questId, progress } = req.body || {};
-  if (typeof questId !== 'string' || !QUESTS[questId]) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  if (typeof questId !== 'string' || !/^[A-Za-z0-9_-]{1,24}$/.test(questId)) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
   if (!Number.isInteger(progress) || progress < 0 || progress > 100000) return res.status(400).json({ error: '진행도가 올바르지 않습니다.' });
   const player = ensurePlayer(req.userKey);
   if (player.qa[questId] === undefined) return res.status(400).json({ error: '수락하지 않은 퀘스트입니다.' });
+  const need = (QUESTS[questId] && QUESTS[questId].need) || 100000;
   const cur = player.questProgress[questId] || 0;
-  const next = Math.max(cur, Math.min(progress, QUESTS[questId].need));
+  const next = Math.max(cur, Math.min(progress, need));
   player.questProgress[questId] = next; player.qa[questId] = next;
   db.states[req.userKey].savedAt = Date.now();
   try { persist(); res.json({ ok:true, questId, progress:next }); } catch(e){ res.status(500).json({ error:'저장 실패' }); }
 });
 app.post('/api/quest/complete', requireUser, (req, res) => {
-  const { questId } = req.body || {};
-  if (typeof questId !== 'string' || !QUESTS[questId]) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  const { questId, rewardCoin, rewardXp, need } = req.body || {};
+  if (typeof questId !== 'string' || !/^[A-Za-z0-9_-]{1,24}$/.test(questId)) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
   const player = ensurePlayer(req.userKey);
-  const quest = QUESTS[questId];
   if (player.qa[questId] === undefined) return res.status(400).json({ error: '수락하지 않은 퀘스트입니다.' });
   if (player.qd.includes(questId)) return res.status(400).json({ error: '이미 완료한 퀘스트입니다.' });
+  const def = QUESTS[questId];
+  const needN = def ? def.need : (Number.isInteger(need) ? Math.min(100000, Math.max(1, need)) : 1);
+  const coinR = def ? def.coin : Math.max(0, Math.min(1e7, Math.floor(Number(rewardCoin) || 0)));
+  const xpR = def ? def.xp : Math.max(0, Math.min(1e7, Math.floor(Number(rewardXp) || 0)));
   const prog = player.questProgress[questId] || player.qa[questId] || 0;
-  if (prog < quest.need) return res.status(400).json({ error: '아직 퀘스트 조건을 충족하지 않았습니다.', progress:prog, need:quest.need });
-  player.coin = (player.coin || 0) + quest.coin; player.xp = (player.xp || 0) + quest.xp;
-  delete player.qa[questId]; if (!player.qd.includes(questId)) player.qd.push(questId);
+  if (prog < needN) return res.status(400).json({ error: '아직 퀘스트 조건을 충족하지 않았습니다.', progress: prog, need: needN });
+  player.coin = (player.coin || 0) + coinR;
+  player.xp = (player.xp || 0) + xpR;
+  delete player.qa[questId];
+  if (!player.qd.includes(questId)) player.qd.push(questId);
   db.states[req.userKey].savedAt = Date.now();
-  try { persist(); res.json({ ok:true, questId, reward:{coin:quest.coin,xp:quest.xp}, coin:player.coin, xp:player.xp, qa:player.qa, qd:player.qd }); }
+  try { persist(); res.json({ ok:true, questId, reward:{coin:coinR,xp:xpR}, coin:player.coin, xp:player.xp, qa:player.qa, qd:player.qd }); }
   catch(e){ res.status(500).json({ error:'저장 실패' }); }
 });
-
 app.get('/healthz',(_req,res)=>res.json({ok:true, monsters:monsters.size}));
 app.use(express.static(path.join(__dirname,'public'),{index:'index.html',dotfiles:'deny',maxAge:'1h',setHeaders(res,p){if(p.endsWith('.html'))res.setHeader('Cache-Control','no-cache');res.setHeader('X-Content-Type-Options','nosniff');}}));
 app.use((err,_req,res,_next)=>{if(res.headersSent)return;res.status(400).json({error:'요청을 처리할 수 없습니다.'});});
@@ -265,7 +270,6 @@ wss.on('connection',ws=>{
     monsters: monsterSnapshot()
   }));
   broadcast({type:'join', player:p}, ws);
-
   ws.on('pong',()=>ws.isAlive=true);
   ws.on('message',(data,binary)=>{
     const now=Date.now();
