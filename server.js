@@ -22,37 +22,50 @@ fs.mkdirSync(DATA_DIR, {recursive:true});
 let db={users:{},states:{}};
 try { const parsed=JSON.parse(fs.readFileSync(DB_FILE,'utf8')); if(parsed&&parsed.users&&parsed.states)db=parsed; } catch(e) { if(e.code!=='ENOENT') console.error('Account store could not be read:',e.message); }
 function persist(){const tmp=DB_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(db));fs.renameSync(tmp,DB_FILE);}
-const sessions=new Map();
 const appLimiter=rateLimit({windowMs:60000,limit:120,standardHeaders:'draft-7',legacyHeaders:false});
 const authLimiter=rateLimit({windowMs:15*60*1000,limit:12,standardHeaders:'draft-7',legacyHeaders:false,message:{error:'로그인/가입 시도가 너무 많습니다. 잠시 후 다시 시도하세요.'}});
 
-// ===== 상점 아이템 정의 =====
-const SHOP_ITEMS = {
-  potion_hp:   { name: 'HP 포션',   cost: 50,   type: 'pot', index: 0, amount: 1 },
-  potion_mp:   { name: 'MP 포션',   cost: 40,   type: 'pot', index: 1, amount: 1 },
-  sword_1:     { name: '철 검',     cost: 300,  type: 'w',   value: 1 },
-  armor_1:     { name: '가죽 갑옷', cost: 250,  type: 'a',   value: 1 },
+const SHOP_W = [null,{name:'철검',cost:80},{name:'강철검',cost:300},{name:'미스릴검',cost:900},{name:'용사검',cost:2500},{name:'마검',cost:7000},{name:'드래곤 슬레이어',cost:18000},{name:'신검',cost:45000}];
+const SHOP_A = [null,{name:'가죽갑옷',cost:80},{name:'사슬갑옷',cost:250},{name:'철갑옷',cost:700},{name:'강철갑옷',cost:1800},{name:'미스릴 갑옷',cost:4500},{name:'용비늘 갑옷',cost:11000},{name:'성기사 갑옷',cost:28000},{name:'암흑왕 갑옷',cost:65000}];
+const SHOP_P = [{name:'체력 물약',cost:15},{name:'고급 물약',cost:45},{name:'대형 물약',cost:120},{name:'엘릭서',cost:500}];
+const QUESTS = {
+  s1:{name:'슬라임 사냥',need:5,coin:80,xp:40}, m1:{name:'버섯 소탕',need:6,coin:150,xp:90},
+  w1:{name:'늑대 퇴치',need:8,coin:300,xp:180}, b1:{name:'불곰 사냥',need:5,coin:550,xp:350},
+  g1:{name:'고블린 소탕',need:10,coin:900,xp:700}, o1:{name:'오크 전사 토벌',need:6,coin:1500,xp:1100},
+  k1:{name:'해골 군단',need:10,coin:2400,xp:1800}, h1:{name:'유령 퇴치',need:8,coin:3800,xp:3000},
+  l1:{name:'골렘 파괴',need:3,coin:6500,xp:5500}, d1:{name:'용 사냥',need:1,coin:14000,xp:13000}
 };
 
-// ===== 퀘스트 정의 =====
-const QUESTS = {
-  kill_10_slime: {
-    name: '슬라임 10마리 처치',
-    acceptTrust: true,
-    completeCheck: (state) => {
-      return (state.player.questProgress?.kill_10_slime || 0) >= 10;
-    },
-    reward: { coin: 200, xp: 150 }
-  },
-  collect_5_herb: {
-    name: '약초 5개 수집',
-    acceptTrust: true,
-    completeCheck: (state) => {
-      return (state.player.questProgress?.collect_5_herb || 0) >= 5;
-    },
-    reward: { coin: 100, xp: 80 }
-  }
+// ===== 서버 몬스터 정의 (공유 월드) =====
+const MT = {
+  slime:    {hp:30,  dmg:6,  xp:12,  g:3,  sp:3.6, r:[21,40],  n:12, sc:1,   reach:1.8, rt:8},
+  wolf:     {hp:55,  dmg:10, xp:20,  g:6,  sp:8,   r:[46,60],  n:10, sc:1,   reach:2.2, rt:8},
+  goblin:   {hp:90,  dmg:14, xp:32,  g:10, sp:5,   r:[66,78],  n:8,  sc:1.1, reach:2.3, rt:10},
+  skeleton: {hp:140, dmg:20, xp:55,  g:18, sp:5.5, r:[83,90],  n:7,  sc:1.15,reach:2.4, rt:12},
+  golem:    {hp:500, dmg:38, xp:220, g:90, sp:3,   r:[94,98],  n:3,  sc:2.4, reach:4.4, rt:30}
 };
+const monsters = new Map(); // id -> {id,type,x,z,hp,mhp,dead,rt,face}
+let monsterSeq = 0;
+function rnd(a,b){return a+Math.random()*(b-a);}
+function spawnMonster(type){
+  const d=MT[type]; if(!d) return null;
+  const a=Math.random()*Math.PI*2, r=rnd(d.r[0],d.r[1]);
+  const id='m'+(++monsterSeq);
+  const m={id,type,x:Math.cos(a)*r,z:Math.sin(a)*r,hp:d.hp,mhp:d.hp,dead:false,rt:0,face:0};
+  monsters.set(id,m);
+  return m;
+}
+function initMonsters(){
+  for(const [type,d] of Object.entries(MT)){
+    for(let i=0;i<d.n;i++) spawnMonster(type);
+  }
+  console.log('Server monsters spawned:', monsters.size);
+}
+initMonsters();
+
+function monsterSnapshot(){
+  return [...monsters.values()].map(m=>({id:m.id,type:m.type,x:+m.x.toFixed(2),z:+m.z.toFixed(2),hp:Math.ceil(m.hp),mhp:m.mhp,dead:!!m.dead,face:+(m.face||0).toFixed(3)}));
+}
 
 app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'","'unsafe-inline'",'https://cdnjs.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'","ws:","wss:"],imgSrc:["'self'","data:"],fontSrc:["'self'","data:"],objectSrc:["'none'"],baseUri:["'self'"],frameAncestors:["'none'"],upgradeInsecureRequests:null}},crossOriginEmbedderPolicy:false,referrerPolicy:{policy:'no-referrer'}}));
 app.use(appLimiter);
@@ -70,6 +83,20 @@ function clearCookie(res){res.setHeader('Set-Cookie','rpg_session=; Path=/; Http
 function userFromReq(req){const cookies=String(req.headers.cookie||'').split(';').map(x=>x.trim());const item=cookies.find(x=>x.startsWith('rpg_session='));if(!item)return null;const payload=unsign(decodeURIComponent(item.slice('rpg_session='.length)));return payload&&db.users[payload.u]?payload.u:null;}
 function requireUser(req,res,next){const u=userFromReq(req);if(!u)return res.status(401).json({error:'로그인이 필요합니다.'});req.userKey=u;next();}
 function publicName(key){return db.users[key].username;}
+function ensurePlayer(key){
+  if(!db.states[key] || !db.states[key].player){
+    db.states[key]={version:1,player:{x:0,z:8,y:0,hp:100,mhp:100,lv:1,xp:0,nx:30,coin:0,at:0,face:0,inv:0,w:0,a:0,pot:[2,0,0,0],rg:0,ow:[0],oa:[0],qa:{},qd:[],questProgress:{}},camera:{},savedAt:Date.now()};
+  }
+  const p=db.states[key].player;
+  if(!Array.isArray(p.pot)) p.pot=[2,0,0,0];
+  while(p.pot.length<4) p.pot.push(0);
+  if(!Array.isArray(p.ow)) p.ow=[0];
+  if(!Array.isArray(p.oa)) p.oa=[0];
+  if(!p.qa || typeof p.qa!=='object') p.qa={};
+  if(!Array.isArray(p.qd)) p.qd=[];
+  if(!p.questProgress || typeof p.questProgress!=='object') p.questProgress={};
+  return p;
+}
 function cleanState(input){
  if(!input||typeof input!=='object'||Array.isArray(input))return null;
  const p=input.player,c=input.camera;if(!p||typeof p!=='object'||Array.isArray(p))return null;
@@ -78,10 +105,12 @@ function cleanState(input){
  player.x=Math.max(-220,Math.min(220,Number(player.x)||0));player.z=Math.max(-220,Math.min(220,Number(player.z)||0));
  player.lv=Math.max(1,Math.min(999,Math.floor(Number(player.lv)||1)));player.mhp=Math.max(1,Math.min(100000,Number(player.mhp)||100));player.hp=Math.max(0,Math.min(player.mhp,Number(player.hp)||0));
  player.coin=Math.max(0,Math.min(1e9,Math.floor(Number(player.coin)||0)));player.xp=Math.max(0,Math.min(1e9,Math.floor(Number(player.xp)||0)));
- player.pot=Array.isArray(p.pot)?p.pot.slice(0,8).map(v=>Math.max(0,Math.min(999,Math.floor(Number(v)||0)))):[2,0];
- // 퀘스트 관련 필드 보존
- if (p.quests && typeof p.quests === 'object') player.quests = p.quests;
- if (p.questProgress && typeof p.questProgress === 'object') player.questProgress = p.questProgress;
+ player.pot=Array.isArray(p.pot)?p.pot.slice(0,8).map(v=>Math.max(0,Math.min(999,Math.floor(Number(v)||0)))):[2,0,0,0];
+ if(Array.isArray(p.ow)) player.ow=p.ow.filter(v=>Number.isInteger(v)&&v>=0&&v<20).slice(0,20);
+ if(Array.isArray(p.oa)) player.oa=p.oa.filter(v=>Number.isInteger(v)&&v>=0&&v<20).slice(0,20);
+ if(p.qa && typeof p.qa==='object') player.qa=p.qa;
+ if(Array.isArray(p.qd)) player.qd=p.qd.filter(v=>typeof v==='string').slice(0,100);
+ if(p.questProgress && typeof p.questProgress==='object') player.questProgress=p.questProgress;
  const camera={};if(c&&typeof c==='object'){for(const k of ['yaw','pit','dist'])if(Number.isFinite(c[k]))camera[k]=Math.max(-1000,Math.min(1000,c[k]));}
  return {version:1,player,camera,savedAt:Date.now()};
 }
@@ -100,7 +129,6 @@ app.post('/api/register',authLimiter,(req,res)=>{
 app.post('/api/login',authLimiter,(req,res)=>{
  const {username,password}=req.body||{};if(typeof username!=='string'||typeof password!=='string')return res.status(400).json({error:'아이디와 비밀번호를 입력하세요.'});
  const key=usernameKey(username),u=db.users[key];
- // Constant-ish work for unknown users to reduce username enumeration timing differences.
  const salt=u?u.salt:'00000000000000000000000000000000';
  const actual=hashPassword(password,salt),expected=u?u.passwordHash:'0'.repeat(128);
  if(!u||!safeEqual(actual,expected))return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
@@ -112,138 +140,230 @@ app.post('/api/save',requireUser,(req,res)=>{const state=cleanState(req.body&&re
 app.post('/api/save-beacon',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).end();let body=req.body;if(typeof body==='string'){try{body=JSON.parse(body);}catch{return res.status(400).end();}}const state=cleanState(body&&body.state);if(!state)return res.status(400).end();db.states[key]=state;try{persist();res.status(204).end();}catch(e){res.status(500).end();}});
 app.post('/api/logout',(req,res)=>{clearCookie(res);res.json({ok:true});});
 
-// ===== 구매 API (서버가 코인 검사 후 처리) =====
 app.post('/api/buy', requireUser, (req, res) => {
-  const { itemId, amount = 1 } = req.body || {};
-  if (typeof itemId !== 'string' || !SHOP_ITEMS[itemId]) {
-    return res.status(400).json({ error: '존재하지 않는 상품입니다.' });
+  const body = req.body || {};
+  const type = body.type;
+  let index = body.index;
+  let amount = body.amount == null ? 1 : body.amount;
+  if (type !== 'w' && type !== 'a' && type !== 'p') return res.status(400).json({ error: '상품 종류가 올바르지 않습니다.' });
+  if (!Number.isInteger(index) || index < 0) return res.status(400).json({ error: '상품 번호가 올바르지 않습니다.' });
+  if (!Number.isInteger(amount) || amount < 1 || amount > 99) return res.status(400).json({ error: '수량이 올바르지 않습니다.' });
+  const player = ensurePlayer(req.userKey);
+  let cost = 0, name = '';
+  if (type === 'p') {
+    if (!SHOP_P[index]) return res.status(400).json({ error: '존재하지 않는 물약입니다.' });
+    cost = SHOP_P[index].cost * amount; name = SHOP_P[index].name;
+  } else if (type === 'w') {
+    if (!SHOP_W[index]) return res.status(400).json({ error: '존재하지 않는 무기입니다.' });
+    if (player.ow.includes(index)) return res.status(400).json({ error: '이미 보유한 무기입니다.' });
+    cost = SHOP_W[index].cost; name = SHOP_W[index].name; amount = 1;
+  } else {
+    if (!SHOP_A[index]) return res.status(400).json({ error: '존재하지 않는 방어구입니다.' });
+    if (player.oa.includes(index)) return res.status(400).json({ error: '이미 보유한 방어구입니다.' });
+    cost = SHOP_A[index].cost; name = SHOP_A[index].name; amount = 1;
   }
-  if (!Number.isInteger(amount) || amount < 1 || amount > 99) {
-    return res.status(400).json({ error: '수량이 올바르지 않습니다.' });
-  }
-
-  const item = SHOP_ITEMS[itemId];
-  const totalCost = item.cost * amount;
-  const state = db.states[req.userKey];
-
-  if (!state || !state.player) {
-    return res.status(400).json({ error: '저장된 캐릭터가 없습니다.' });
-  }
-
-  // 서버가 직접 코인 검사
-  if ((state.player.coin || 0) < totalCost) {
-    return res.status(400).json({ error: '코인이 부족합니다.', need: totalCost, have: state.player.coin || 0 });
-  }
-
-  // 코인 차감
-  state.player.coin -= totalCost;
-
-  // 아이템 지급
-  if (item.type === 'pot') {
-    if (!Array.isArray(state.player.pot)) state.player.pot = [0, 0];
-    state.player.pot[item.index] = (state.player.pot[item.index] || 0) + (item.amount * amount);
-  } else if (item.type === 'w') {
-    state.player.w = item.value;
-  } else if (item.type === 'a') {
-    state.player.a = item.value;
-  }
-
-  state.savedAt = Date.now();
-  try {
-    persist();
-    res.json({ ok: true, coin: state.player.coin, item: itemId, amount });
-  } catch (e) {
-    res.status(500).json({ error: '저장 실패' });
-  }
+  if ((player.coin || 0) < cost) return res.status(400).json({ error: '코인이 부족합니다.', need: cost, have: player.coin || 0 });
+  player.coin -= cost;
+  if (type === 'p') player.pot[index] = (player.pot[index] || 0) + amount;
+  else if (type === 'w') { if (!player.ow.includes(index)) player.ow.push(index); player.w = index; }
+  else { if (!player.oa.includes(index)) player.oa.push(index); player.a = index; }
+  db.states[req.userKey].savedAt = Date.now();
+  try { persist(); res.json({ ok:true, type, index, amount, name, coin:player.coin, pot:player.pot, w:player.w, a:player.a, ow:player.ow, oa:player.oa }); }
+  catch(e){ res.status(500).json({ error:'저장 실패' }); }
 });
 
-// ===== 퀘스트 수락 (서버가 믿고 기록) =====
 app.post('/api/quest/accept', requireUser, (req, res) => {
   const { questId } = req.body || {};
-  if (!QUESTS[questId]) {
-    return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
-  }
-
-  const state = db.states[req.userKey];
-  if (!state || !state.player) {
-    return res.status(400).json({ error: '저장된 캐릭터가 없습니다.' });
-  }
-
-  if (!state.player.quests) state.player.quests = {};
-  if (state.player.quests[questId]?.status === 'accepted' || state.player.quests[questId]?.status === 'completed') {
-    return res.status(400).json({ error: '이미 수락했거나 완료한 퀘스트입니다.' });
-  }
-
-  // 수락은 서버가 믿고 바로 기록
-  state.player.quests[questId] = { status: 'accepted', acceptedAt: Date.now() };
-  if (!state.player.questProgress) state.player.questProgress = {};
-  state.player.questProgress[questId] = 0;
-
-  state.savedAt = Date.now();
-  try {
-    persist();
-    res.json({ ok: true, questId });
-  } catch (e) {
-    res.status(500).json({ error: '저장 실패' });
-  }
+  if (typeof questId !== 'string' || !QUESTS[questId]) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  const player = ensurePlayer(req.userKey);
+  if (player.qd.includes(questId)) return res.status(400).json({ error: '이미 완료한 퀘스트입니다.' });
+  if (player.qa[questId] !== undefined) return res.status(400).json({ error: '이미 수락한 퀘스트입니다.' });
+  if (Object.keys(player.qa).length >= 5) return res.status(400).json({ error: '퀘스트는 동시에 5개까지 받을 수 있습니다.' });
+  player.qa[questId] = 0; player.questProgress[questId] = 0;
+  db.states[req.userKey].savedAt = Date.now();
+  try { persist(); res.json({ ok:true, questId, qa:player.qa }); } catch(e){ res.status(500).json({ error:'저장 실패' }); }
 });
-
-// ===== 퀘스트 완료 (서버가 실제 조건 검사) =====
+app.post('/api/quest/progress', requireUser, (req, res) => {
+  const { questId, progress } = req.body || {};
+  if (typeof questId !== 'string' || !QUESTS[questId]) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  if (!Number.isInteger(progress) || progress < 0 || progress > 100000) return res.status(400).json({ error: '진행도가 올바르지 않습니다.' });
+  const player = ensurePlayer(req.userKey);
+  if (player.qa[questId] === undefined) return res.status(400).json({ error: '수락하지 않은 퀘스트입니다.' });
+  const cur = player.questProgress[questId] || 0;
+  const next = Math.max(cur, Math.min(progress, QUESTS[questId].need));
+  player.questProgress[questId] = next; player.qa[questId] = next;
+  db.states[req.userKey].savedAt = Date.now();
+  try { persist(); res.json({ ok:true, questId, progress:next }); } catch(e){ res.status(500).json({ error:'저장 실패' }); }
+});
 app.post('/api/quest/complete', requireUser, (req, res) => {
   const { questId } = req.body || {};
-  if (!QUESTS[questId]) {
-    return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
-  }
-
-  const state = db.states[req.userKey];
-  if (!state || !state.player) {
-    return res.status(400).json({ error: '저장된 캐릭터가 없습니다.' });
-  }
-
+  if (typeof questId !== 'string' || !QUESTS[questId]) return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  const player = ensurePlayer(req.userKey);
   const quest = QUESTS[questId];
-  const q = state.player.quests?.[questId];
-
-  if (!q || q.status !== 'accepted') {
-    return res.status(400).json({ error: '수락하지 않은 퀘스트입니다.' });
-  }
-
-  // 서버가 실제 완료 조건을 검사
-  if (!quest.completeCheck(state)) {
-    return res.status(400).json({ error: '아직 퀘스트 조건을 충족하지 않았습니다.' });
-  }
-
-  // 보상 지급
-  state.player.coin = (state.player.coin || 0) + (quest.reward.coin || 0);
-  state.player.xp   = (state.player.xp   || 0) + (quest.reward.xp   || 0);
-
-  // 상태 변경
-  state.player.quests[questId] = { status: 'completed', completedAt: Date.now() };
-
-  state.savedAt = Date.now();
-  try {
-    persist();
-    res.json({
-      ok: true,
-      questId,
-      reward: quest.reward,
-      coin: state.player.coin,
-      xp: state.player.xp
-    });
-  } catch (e) {
-    res.status(500).json({ error: '저장 실패' });
-  }
+  if (player.qa[questId] === undefined) return res.status(400).json({ error: '수락하지 않은 퀘스트입니다.' });
+  if (player.qd.includes(questId)) return res.status(400).json({ error: '이미 완료한 퀘스트입니다.' });
+  const prog = player.questProgress[questId] || player.qa[questId] || 0;
+  if (prog < quest.need) return res.status(400).json({ error: '아직 퀘스트 조건을 충족하지 않았습니다.', progress:prog, need:quest.need });
+  player.coin = (player.coin || 0) + quest.coin; player.xp = (player.xp || 0) + quest.xp;
+  delete player.qa[questId]; if (!player.qd.includes(questId)) player.qd.push(questId);
+  db.states[req.userKey].savedAt = Date.now();
+  try { persist(); res.json({ ok:true, questId, reward:{coin:quest.coin,xp:quest.xp}, coin:player.coin, xp:player.xp, qa:player.qa, qd:player.qd }); }
+  catch(e){ res.status(500).json({ error:'저장 실패' }); }
 });
 
-app.get('/healthz',(_req,res)=>res.json({ok:true}));
+app.get('/healthz',(_req,res)=>res.json({ok:true, monsters:monsters.size}));
 app.use(express.static(path.join(__dirname,'public'),{index:'index.html',dotfiles:'deny',maxAge:'1h',setHeaders(res,p){if(p.endsWith('.html'))res.setHeader('Cache-Control','no-cache');res.setHeader('X-Content-Type-Options','nosniff');}}));
 app.use((err,_req,res,_next)=>{if(res.headersSent)return;res.status(400).json({error:'요청을 처리할 수 없습니다.'});});
+
 const server=app.listen(PORT,HOST,()=>console.log(`RPG server listening on ${HOST}:${PORT}; data=${DB_FILE}`));
-const wss=new WebSocketServer({noServer:true,maxPayload:1024,perMessageDeflate:false});
-const players=new Map(),socketsByIp=new Map();
+const wss=new WebSocketServer({noServer:true,maxPayload:2048,perMessageDeflate:false});
+const players=new Map(), socketsByIp=new Map();
+
 function allowedOrigin(origin,req){if(!origin)return false;if(ALLOWED_ORIGINS.has(origin))return true;try{const u=new URL(origin),secure=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https';return u.host===req.headers.host&&u.protocol===(secure?'https:':'http:');}catch{return false;}}
 function broadcast(data,except){const raw=JSON.stringify(data);for(const c of wss.clients)if(c!==except&&c.readyState===WebSocket.OPEN)try{c.send(raw);}catch{}}
-server.on('upgrade',(req,socket,head)=>{let pathname;try{pathname=new URL(req.url,'http://localhost').pathname;}catch{socket.destroy();return;}if(pathname!=='/ws'||!allowedOrigin(req.headers.origin,req)){socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return;}const ip=String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').split(',')[0].trim();if((socketsByIp.get(ip)||0)>=4||players.size>=MAX_PLAYERS){socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');socket.destroy();return;}wss.handleUpgrade(req,socket,head,ws=>{ws._ip=ip;socketsByIp.set(ip,(socketsByIp.get(ip)||0)+1);wss.emit('connection',ws,req);});});
-wss.on('connection',ws=>{ws.isAlive=true;ws.last=0;const id=crypto.randomUUID(),p={id,name:'플레이어-'+id.slice(0,4),x:0,z:8,y:0,face:0};players.set(id,p);ws.player=p;ws.send(JSON.stringify({type:'welcome',id,players:[...players.values()].filter(x=>x.id!==id)}));broadcast({type:'join',player:p},ws);ws.on('pong',()=>ws.isAlive=true);ws.on('message',(data,binary)=>{const now=Date.now();if(binary||data.length>1024||now-ws.last<80){ws.strikes=(ws.strikes||0)+1;if(ws.strikes>3)ws.close(1008,'rate limit');return;}ws.last=now;let m;try{m=JSON.parse(data.toString());}catch{ws.close(1007,'json');return;}if(!m||m.type!=='move'||![-220,220].every((v,i)=>true)||!Number.isFinite(m.x)||!Number.isFinite(m.z)||!Number.isFinite(m.y)||!Number.isFinite(m.face)||Math.abs(m.x)>230||Math.abs(m.z)>230||m.y<0||m.y>40){ws.strikes=(ws.strikes||0)+1;if(ws.strikes>=3)ws.close(1008,'state');return;}Object.assign(p,{x:m.x,z:m.z,y:m.y,face:m.face});broadcast({type:'state',player:p},ws);});ws.on('close',()=>{players.delete(p.id);broadcast({type:'leave',id:p.id});const n=(socketsByIp.get(ws._ip)||1)-1;if(n>0)socketsByIp.set(ws._ip,n);else socketsByIp.delete(ws._ip);});ws.on('error',()=>{});ws._heartbeat=setInterval(()=>{if(!ws.isAlive){ws.terminate();clearInterval(ws._heartbeat);return;}ws.isAlive=false;ws.ping();},30000);});
+function broadcastAll(data){const raw=JSON.stringify(data);for(const c of wss.clients)if(c.readyState===WebSocket.OPEN)try{c.send(raw);}catch{}}
+
+function userFromWsReq(req){
+  const cookies=String(req.headers.cookie||'').split(';').map(x=>x.trim());
+  const item=cookies.find(x=>x.startsWith('rpg_session='));
+  if(!item) return null;
+  const payload=unsign(decodeURIComponent(item.slice('rpg_session='.length)));
+  if(!payload||!db.users[payload.u]) return null;
+  return { key: payload.u, username: db.users[payload.u].username };
+}
+
+server.on('upgrade',(req,socket,head)=>{
+  let pathname; try{pathname=new URL(req.url,'http://localhost').pathname;}catch{socket.destroy();return;}
+  if(pathname!=='/ws'||!allowedOrigin(req.headers.origin,req)){socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');socket.destroy();return;}
+  const ip=String(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').split(',')[0].trim();
+  if((socketsByIp.get(ip)||0)>=4||players.size>=MAX_PLAYERS){socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n');socket.destroy();return;}
+  wss.handleUpgrade(req,socket,head,ws=>{
+    ws._ip=ip;
+    socketsByIp.set(ip,(socketsByIp.get(ip)||0)+1);
+    // 로그인 닉네임을 멀티플레이 이름으로 사용
+    const auth=userFromWsReq(req);
+    ws._userKey=auth?auth.key:null;
+    ws._username=auth?auth.username:null;
+    wss.emit('connection',ws,req);
+  });
+});
+
+wss.on('connection',ws=>{
+  ws.isAlive=true; ws.last=0;
+  const id=crypto.randomUUID();
+  // 회원가입/로그인 닉네임이 있으면 그 이름, 없으면 익명
+  const displayName = ws._username || ('플레이어-'+id.slice(0,4));
+  const p={id, name:displayName, x:0, z:8, y:0, face:0};
+  players.set(id,p); ws.player=p;
+
+  // 접속 시: 다른 플레이어 + 서버 몬스터 전체 상태 전송
+  ws.send(JSON.stringify({
+    type:'welcome',
+    id,
+    name: displayName,
+    players:[...players.values()].filter(x=>x.id!==id),
+    monsters: monsterSnapshot()
+  }));
+  broadcast({type:'join', player:p}, ws);
+
+  ws.on('pong',()=>ws.isAlive=true);
+  ws.on('message',(data,binary)=>{
+    const now=Date.now();
+    if(binary||data.length>2048||now-ws.last<50){ws.strikes=(ws.strikes||0)+1;if(ws.strikes>5)ws.close(1008,'rate limit');return;}
+    ws.last=now;
+    let m; try{m=JSON.parse(data.toString());}catch{ws.close(1007,'json');return;}
+    if(!m||typeof m.type!=='string') return;
+
+    if(m.type==='move'){
+      if(!Number.isFinite(m.x)||!Number.isFinite(m.z)||!Number.isFinite(m.y)||!Number.isFinite(m.face)||Math.abs(m.x)>230||Math.abs(m.z)>230||m.y<0||m.y>40){
+        ws.strikes=(ws.strikes||0)+1; if(ws.strikes>=5)ws.close(1008,'state'); return;
+      }
+      Object.assign(p,{x:m.x,z:m.z,y:m.y,face:m.face});
+      broadcast({type:'state',player:p},ws);
+      return;
+    }
+
+    // 서버 권한 공격: 클라이언트가 몬스터 id + 데미지 요청
+    if(m.type==='hit'){
+      if(typeof m.id!=='string'||!Number.isFinite(m.dmg)) return;
+      const mon=monsters.get(m.id);
+      if(!mon||mon.dead) return;
+      const dmg=Math.max(1, Math.min(5000, Math.floor(m.dmg)));
+      // 거리 대략 검증 (치트 완화)
+      const dist=Math.hypot(mon.x-p.x, mon.z-p.z);
+      const def=MT[mon.type];
+      if(dist > (def?def.reach:2)+6) return;
+      mon.hp -= dmg;
+      if(mon.hp<=0){
+        mon.hp=0; mon.dead=true; mon.rt=def?def.rt:10;
+        const reward={coin:def?def.g:0, xp:def?def.xp:0, type:mon.type};
+        // 공격자에게만 보상 알림
+        try{ ws.send(JSON.stringify({type:'kill', id:mon.id, reward})); }catch{}
+        broadcastAll({type:'monster', monster:{id:mon.id,type:mon.type,x:mon.x,z:mon.z,hp:0,mhp:mon.mhp,dead:true,face:mon.face}});
+      } else {
+        broadcastAll({type:'monster', monster:{id:mon.id,type:mon.type,x:+mon.x.toFixed(2),z:+mon.z.toFixed(2),hp:Math.ceil(mon.hp),mhp:mon.mhp,dead:false,face:+(mon.face||0).toFixed(3)}});
+      }
+      return;
+    }
+  });
+
+  ws.on('close',()=>{
+    players.delete(p.id);
+    broadcast({type:'leave',id:p.id});
+    const n=(socketsByIp.get(ws._ip)||1)-1;
+    if(n>0)socketsByIp.set(ws._ip,n); else socketsByIp.delete(ws._ip);
+  });
+  ws.on('error',()=>{});
+  ws._heartbeat=setInterval(()=>{
+    if(!ws.isAlive){ws.terminate();clearInterval(ws._heartbeat);return;}
+    ws.isAlive=false; ws.ping();
+  },30000);
+});
+
+// ===== 서버 몬스터 AI / 리스폰 루프 (100ms) =====
+setInterval(()=>{
+  const dt=0.1;
+  // 가장 가까운 플레이어에게 접근
+  const plist=[...players.values()];
+  for(const mon of monsters.values()){
+    const def=MT[mon.type]; if(!def) continue;
+    if(mon.dead){
+      mon.rt -= dt;
+      if(mon.rt<=0){
+        const a=Math.random()*Math.PI*2, r=rnd(def.r[0],def.r[1]);
+        mon.x=Math.cos(a)*r; mon.z=Math.sin(a)*r;
+        mon.hp=def.hp; mon.mhp=def.hp; mon.dead=false; mon.rt=0;
+        broadcastAll({type:'monster', monster:{id:mon.id,type:mon.type,x:+mon.x.toFixed(2),z:+mon.z.toFixed(2),hp:mon.hp,mhp:mon.mhp,dead:false,face:0}});
+      }
+      continue;
+    }
+    let nearest=null, nd=1e9;
+    for(const pl of plist){
+      const d=Math.hypot(pl.x-mon.x, pl.z-mon.z);
+      if(d<nd){nd=d; nearest=pl;}
+    }
+    if(nearest && nd<18 && nd>def.reach*0.6){
+      const ang=Math.atan2(nearest.x-mon.x, nearest.z-mon.z);
+      mon.face=ang;
+      mon.x += Math.sin(ang)*def.sp*dt;
+      mon.z += Math.cos(ang)*def.sp*dt;
+    }
+  }
+  // 주기적으로 전체 스냅샷 (2초마다) — 동기화 보정
+}, 100);
+
+let snapTick=0;
+setInterval(()=>{
+  snapTick++;
+  if(snapTick%20===0){ // 2초
+    broadcastAll({type:'monsters', monsters:monsterSnapshot()});
+  } else {
+    // 살아있는 몬스터 위치만 가벼운 업데이트
+    const live=[...monsters.values()].filter(m=>!m.dead).map(m=>({id:m.id,type:m.type,x:+m.x.toFixed(2),z:+m.z.toFixed(2),hp:Math.ceil(m.hp),mhp:m.mhp,dead:false,face:+(m.face||0).toFixed(3)}));
+    if(live.length) broadcastAll({type:'monsters', monsters:live, partial:true});
+  }
+}, 100);
+
 server.on('close',()=>{for(const ws of wss.clients)ws.terminate();});
 process.on('SIGTERM',()=>server.close(()=>process.exit(0)));
 process.on('SIGINT',()=>server.close(()=>process.exit(0)));
