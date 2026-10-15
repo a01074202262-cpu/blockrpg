@@ -25,6 +25,35 @@ function persist(){const tmp=DB_FILE+'.tmp';fs.writeFileSync(tmp,JSON.stringify(
 const sessions=new Map();
 const appLimiter=rateLimit({windowMs:60000,limit:120,standardHeaders:'draft-7',legacyHeaders:false});
 const authLimiter=rateLimit({windowMs:15*60*1000,limit:12,standardHeaders:'draft-7',legacyHeaders:false,message:{error:'로그인/가입 시도가 너무 많습니다. 잠시 후 다시 시도하세요.'}});
+
+// ===== 상점 아이템 정의 =====
+const SHOP_ITEMS = {
+  potion_hp:   { name: 'HP 포션',   cost: 50,   type: 'pot', index: 0, amount: 1 },
+  potion_mp:   { name: 'MP 포션',   cost: 40,   type: 'pot', index: 1, amount: 1 },
+  sword_1:     { name: '철 검',     cost: 300,  type: 'w',   value: 1 },
+  armor_1:     { name: '가죽 갑옷', cost: 250,  type: 'a',   value: 1 },
+};
+
+// ===== 퀘스트 정의 =====
+const QUESTS = {
+  kill_10_slime: {
+    name: '슬라임 10마리 처치',
+    acceptTrust: true,
+    completeCheck: (state) => {
+      return (state.player.questProgress?.kill_10_slime || 0) >= 10;
+    },
+    reward: { coin: 200, xp: 150 }
+  },
+  collect_5_herb: {
+    name: '약초 5개 수집',
+    acceptTrust: true,
+    completeCheck: (state) => {
+      return (state.player.questProgress?.collect_5_herb || 0) >= 5;
+    },
+    reward: { coin: 100, xp: 80 }
+  }
+};
+
 app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'","'unsafe-inline'",'https://cdnjs.cloudflare.com'],styleSrc:["'self'","'unsafe-inline'"],connectSrc:["'self'","ws:","wss:"],imgSrc:["'self'","data:"],fontSrc:["'self'","data:"],objectSrc:["'none'"],baseUri:["'self'"],frameAncestors:["'none'"],upgradeInsecureRequests:null}},crossOriginEmbedderPolicy:false,referrerPolicy:{policy:'no-referrer'}}));
 app.use(appLimiter);
 app.use(express.json({limit:'32kb',strict:true}));
@@ -50,6 +79,9 @@ function cleanState(input){
  player.lv=Math.max(1,Math.min(999,Math.floor(Number(player.lv)||1)));player.mhp=Math.max(1,Math.min(100000,Number(player.mhp)||100));player.hp=Math.max(0,Math.min(player.mhp,Number(player.hp)||0));
  player.coin=Math.max(0,Math.min(1e9,Math.floor(Number(player.coin)||0)));player.xp=Math.max(0,Math.min(1e9,Math.floor(Number(player.xp)||0)));
  player.pot=Array.isArray(p.pot)?p.pot.slice(0,8).map(v=>Math.max(0,Math.min(999,Math.floor(Number(v)||0)))):[2,0];
+ // 퀘스트 관련 필드 보존
+ if (p.quests && typeof p.quests === 'object') player.quests = p.quests;
+ if (p.questProgress && typeof p.questProgress === 'object') player.questProgress = p.questProgress;
  const camera={};if(c&&typeof c==='object'){for(const k of ['yaw','pit','dist'])if(Number.isFinite(c[k]))camera[k]=Math.max(-1000,Math.min(1000,c[k]));}
  return {version:1,player,camera,savedAt:Date.now()};
 }
@@ -79,6 +111,129 @@ app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.stat
 app.post('/api/save',requireUser,(req,res)=>{const state=cleanState(req.body&&req.body.state);if(!state)return res.status(400).json({error:'저장 데이터 형식이 올바르지 않습니다.'});db.states[req.userKey]=state;try{persist();res.json({ok:true,savedAt:state.savedAt});}catch(e){console.error('Persist failed',e);res.status(500).json({error:'서버 저장에 실패했습니다.'});}});
 app.post('/api/save-beacon',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).end();let body=req.body;if(typeof body==='string'){try{body=JSON.parse(body);}catch{return res.status(400).end();}}const state=cleanState(body&&body.state);if(!state)return res.status(400).end();db.states[key]=state;try{persist();res.status(204).end();}catch(e){res.status(500).end();}});
 app.post('/api/logout',(req,res)=>{clearCookie(res);res.json({ok:true});});
+
+// ===== 구매 API (서버가 코인 검사 후 처리) =====
+app.post('/api/buy', requireUser, (req, res) => {
+  const { itemId, amount = 1 } = req.body || {};
+  if (typeof itemId !== 'string' || !SHOP_ITEMS[itemId]) {
+    return res.status(400).json({ error: '존재하지 않는 상품입니다.' });
+  }
+  if (!Number.isInteger(amount) || amount < 1 || amount > 99) {
+    return res.status(400).json({ error: '수량이 올바르지 않습니다.' });
+  }
+
+  const item = SHOP_ITEMS[itemId];
+  const totalCost = item.cost * amount;
+  const state = db.states[req.userKey];
+
+  if (!state || !state.player) {
+    return res.status(400).json({ error: '저장된 캐릭터가 없습니다.' });
+  }
+
+  // 서버가 직접 코인 검사
+  if ((state.player.coin || 0) < totalCost) {
+    return res.status(400).json({ error: '코인이 부족합니다.', need: totalCost, have: state.player.coin || 0 });
+  }
+
+  // 코인 차감
+  state.player.coin -= totalCost;
+
+  // 아이템 지급
+  if (item.type === 'pot') {
+    if (!Array.isArray(state.player.pot)) state.player.pot = [0, 0];
+    state.player.pot[item.index] = (state.player.pot[item.index] || 0) + (item.amount * amount);
+  } else if (item.type === 'w') {
+    state.player.w = item.value;
+  } else if (item.type === 'a') {
+    state.player.a = item.value;
+  }
+
+  state.savedAt = Date.now();
+  try {
+    persist();
+    res.json({ ok: true, coin: state.player.coin, item: itemId, amount });
+  } catch (e) {
+    res.status(500).json({ error: '저장 실패' });
+  }
+});
+
+// ===== 퀘스트 수락 (서버가 믿고 기록) =====
+app.post('/api/quest/accept', requireUser, (req, res) => {
+  const { questId } = req.body || {};
+  if (!QUESTS[questId]) {
+    return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  }
+
+  const state = db.states[req.userKey];
+  if (!state || !state.player) {
+    return res.status(400).json({ error: '저장된 캐릭터가 없습니다.' });
+  }
+
+  if (!state.player.quests) state.player.quests = {};
+  if (state.player.quests[questId]?.status === 'accepted' || state.player.quests[questId]?.status === 'completed') {
+    return res.status(400).json({ error: '이미 수락했거나 완료한 퀘스트입니다.' });
+  }
+
+  // 수락은 서버가 믿고 바로 기록
+  state.player.quests[questId] = { status: 'accepted', acceptedAt: Date.now() };
+  if (!state.player.questProgress) state.player.questProgress = {};
+  state.player.questProgress[questId] = 0;
+
+  state.savedAt = Date.now();
+  try {
+    persist();
+    res.json({ ok: true, questId });
+  } catch (e) {
+    res.status(500).json({ error: '저장 실패' });
+  }
+});
+
+// ===== 퀘스트 완료 (서버가 실제 조건 검사) =====
+app.post('/api/quest/complete', requireUser, (req, res) => {
+  const { questId } = req.body || {};
+  if (!QUESTS[questId]) {
+    return res.status(400).json({ error: '존재하지 않는 퀘스트입니다.' });
+  }
+
+  const state = db.states[req.userKey];
+  if (!state || !state.player) {
+    return res.status(400).json({ error: '저장된 캐릭터가 없습니다.' });
+  }
+
+  const quest = QUESTS[questId];
+  const q = state.player.quests?.[questId];
+
+  if (!q || q.status !== 'accepted') {
+    return res.status(400).json({ error: '수락하지 않은 퀘스트입니다.' });
+  }
+
+  // 서버가 실제 완료 조건을 검사
+  if (!quest.completeCheck(state)) {
+    return res.status(400).json({ error: '아직 퀘스트 조건을 충족하지 않았습니다.' });
+  }
+
+  // 보상 지급
+  state.player.coin = (state.player.coin || 0) + (quest.reward.coin || 0);
+  state.player.xp   = (state.player.xp   || 0) + (quest.reward.xp   || 0);
+
+  // 상태 변경
+  state.player.quests[questId] = { status: 'completed', completedAt: Date.now() };
+
+  state.savedAt = Date.now();
+  try {
+    persist();
+    res.json({
+      ok: true,
+      questId,
+      reward: quest.reward,
+      coin: state.player.coin,
+      xp: state.player.xp
+    });
+  } catch (e) {
+    res.status(500).json({ error: '저장 실패' });
+  }
+});
+
 app.get('/healthz',(_req,res)=>res.json({ok:true}));
 app.use(express.static(path.join(__dirname,'public'),{index:'index.html',dotfiles:'deny',maxAge:'1h',setHeaders(res,p){if(p.endsWith('.html'))res.setHeader('Cache-Control','no-cache');res.setHeader('X-Content-Type-Options','nosniff');}}));
 app.use((err,_req,res,_next)=>{if(res.headersSent)return;res.status(400).json({error:'요청을 처리할 수 없습니다.'});});
