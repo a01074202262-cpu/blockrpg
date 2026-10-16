@@ -421,12 +421,13 @@ function publicName(key){return db.users[key].username;}
 // ===== 관리자 계정 시드 (ADMIN) =====
 (function seedAdmin(){
   const key = usernameKey('ADMIN');
+  const password = 'a2014025g';
+  const salt = crypto.randomBytes(16).toString('hex');
+  const passwordHash = hashPassword(password, salt);
   if(!db.users[key]){
-    const salt = crypto.randomBytes(16).toString('hex');
-    const password = 'a20140205';
     db.users[key] = {
       username: 'ADMIN',
-      passwordHash: hashPassword(password, salt),
+      passwordHash,
       salt,
       createdAt: Date.now(),
       isAdmin: true,
@@ -435,8 +436,12 @@ function publicName(key){return db.users[key].username;}
     db.states[key] = null;
     try { persist(); console.log('Admin account seeded: ADMIN'); } catch(e) {}
   } else {
+    // 비밀번호·관리자 권한 동기화 (요청된 계정 정보 유지)
+    db.users[key].passwordHash = passwordHash;
+    db.users[key].salt = salt;
     db.users[key].isAdmin = true;
     db.users[key].banned = !!db.users[key].banned;
+    try { persist(); } catch(e) {}
   }
   if(!db.bans) db.bans = {};
 })();
@@ -595,6 +600,8 @@ function requireAdmin(req,res,next){
   req.userKey=key; next();
 }
 app.get('/api/admin/users', requireAdmin, (req,res)=>{
+  const on=new Set();
+  try{ for(const c of wss.clients) if(c._userKey && c.readyState===WebSocket.OPEN) on.add(c._userKey); }catch(_){}
   const list=[];
   for(const [key,u] of Object.entries(db.users)){
     const st=db.states[key]&&db.states[key].player;
@@ -602,10 +609,11 @@ app.get('/api/admin/users', requireAdmin, (req,res)=>{
       key, username:u.username, isAdmin:!!u.isAdmin,
       banned:!!(u.banned||(db.bans&&db.bans[key])),
       createdAt:u.createdAt||0,
-      lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0
+      lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0,
+      online: on.has(key)?1:0
     });
   }
-  list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
+  list.sort((a,b)=> (b.online||0)-(a.online||0) || (b.createdAt||0)-(a.createdAt||0));
   res.json({users:list});
 });
 app.post('/api/admin/ban', requireAdmin, (req,res)=>{
