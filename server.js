@@ -425,26 +425,22 @@ function publicName(key){return db.users[key].username;}
   const salt = crypto.randomBytes(16).toString('hex');
   const passwordHash = hashPassword(password, salt);
   if(!db.users[key]){
-    db.users[key] = {
-      username: 'ADMIN',
-      passwordHash,
-      salt,
-      createdAt: Date.now(),
-      isAdmin: true,
-      banned: false
-    };
+    db.users[key] = { username: 'ADMIN', passwordHash, salt, createdAt: Date.now(), isAdmin: true, banned: false };
     db.states[key] = null;
-    try { persist(); console.log('Admin account seeded: ADMIN'); } catch(e) {}
+    console.log('Admin account created: ADMIN');
   } else {
-    // 비밀번호·관리자 권한 동기화 (요청된 계정 정보 유지)
     db.users[key].passwordHash = passwordHash;
     db.users[key].salt = salt;
     db.users[key].isAdmin = true;
-    db.users[key].banned = !!db.users[key].banned;
-    try { persist(); } catch(e) {}
+    db.users[key].banned = false;
+    if(db.bans) delete db.bans[key];
+    console.log('Admin account password/permissions refreshed: ADMIN');
   }
+  try { persist(); } catch(e) { console.error('admin seed persist failed', e.message); }
   if(!db.bans) db.bans = {};
 })();
+
+
 
 function ensurePlayer(key){
   if(!db.states[key] || !db.states[key].player){
@@ -604,12 +600,12 @@ app.get('/api/admin/users', requireAdmin, (req,res)=>{
   try{ for(const c of wss.clients) if(c._userKey && c.readyState===WebSocket.OPEN) on.add(c._userKey); }catch(_){}
   const list=[];
   for(const [key,u] of Object.entries(db.users)){
-    const st=db.states[key]&&db.states[key].player;
+    const pst=db.states[key]&&db.states[key].player;
     list.push({
       key, username:u.username, isAdmin:!!u.isAdmin,
       banned:!!(u.banned||(db.bans&&db.bans[key])),
       createdAt:u.createdAt||0,
-      lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0,
+      lv: pst?pst.lv:1, coin: pst?pst.coin:0, xp: pst?pst.xp:0,
       online: on.has(key)?1:0
     });
   }
