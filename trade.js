@@ -6,7 +6,6 @@
 //    trade.onClose(p)             → 접속 종료 시 진행 중인 거래 정리
 // =====================================================================
 
-const TRADE_RANGE = 18;          // 거래 가능 거리(m)
 const OPEN_TTL_MS = 45000;       // 요청 후 수락 대기 시간
 const ACTIVE_TTL_MS = 180000;    // 거래창 유지 시간
 
@@ -107,12 +106,25 @@ function tradeSnapshot(p) {
  *   ensurePlayer,   // (userKey) => 저장 데이터의 player 객체
  *   sendTo,         // (id, obj) => void
  *   msgTo,          // (id, text) => void
- *   persistSoon     // () => void        (MongoDB 에 저장 예약)
+ *   persistSoon,    // () => void        (MongoDB 에 저장 예약)
+ *   inSafe          // (x, z) => boolean (안전지대 여부)
  * }
  */
 module.exports = function createTrade(ctx) {
-  const { players, wsById, getDb, ensurePlayer, sendTo, msgTo, persistSoon } = ctx;
+  const { players, wsById, getDb, ensurePlayer, sendTo, msgTo, persistSoon, inSafe } = ctx;
   const trades = new Map(); // "idA|idB" -> { a, b, offerA, offerB, readyA, readyB, t, stage }
+
+
+  // ---- 안전지대 검사: 거래는 양쪽 모두 안전지대에 있어야 가능 (거리 제한 없음) ----
+  const isSafe = q => !!q && inSafe(Number(q.x) || 0, Number(q.z) || 0);
+  // me 입장에서의 안내 문구 (통과하면 null)
+  function safeMsg(me, other) {
+    const a = isSafe(me), b = isSafe(other);
+    if (a && b) return null;
+    if (!a && !b) return '안전지대에 본인과 ' + other.name + ' 님이 있어야 합니다.';
+    if (!a) return '안전지대에 본인이 있어야 합니다.';
+    return '안전지대에 ' + other.name + ' 님이 있어야 합니다.';
+  }
 
   function findTradeOf(id) {
     for (const tr of trades.values()) {
@@ -141,9 +153,8 @@ module.exports = function createTrade(ctx) {
     if (now - (ws._trT || 0) < 1500) return; ws._trT = now;
     const tp = players.get(m.to);
     if (!tp || tp.id === p.id) return msgTo(p.id, '거래할 수 없는 대상이에요.');
-    if (Math.hypot((p.x || 0) - (tp.x || 0), (p.z || 0) - (tp.z || 0)) > TRADE_RANGE) {
-      return msgTo(p.id, '상대가 너무 멀어요. (' + TRADE_RANGE + 'm 이내)');
-    }
+    const sm = safeMsg(p, tp);
+    if (sm) return msgTo(p.id, sm);
     const k = tradeKey(p.id, tp.id);
     if (trades.has(k)) return msgTo(p.id, '이미 진행 중인 거래가 있어요.');
     trades.set(k, { a: p.id, b: tp.id, offerA: cleanOffer(null), offerB: cleanOffer(null), readyA: 0, readyB: 0, t: now, stage: 'open' });
@@ -165,6 +176,8 @@ module.exports = function createTrade(ctx) {
     }
     const pa = players.get(tr.a), pb = players.get(tr.b);
     if (!pa || !pb) { trades.delete(k); return; }
+    const sm = safeMsg(p, p.id === pa.id ? pb : pa);
+    if (sm) { trades.delete(k); sendTo(fromId, { type: 'trade_end', reason: '안전지대가 아님' }); return msgTo(p.id, sm); }
     tr.stage = 'active'; tr.t = now;
     sendTo(tr.a, { type: 'trade_open', with: { id: pb.id, name: pb.name, lv: pb.lv || 1 }, you: 'A' });
     sendTo(tr.b, { type: 'trade_open', with: { id: pa.id, name: pa.name, lv: pa.lv || 1 }, you: 'B' });
@@ -199,6 +212,15 @@ module.exports = function createTrade(ctx) {
     const userB = (wsById.get(tr.b) || {})._userKey;
     if (!userA || !userB) return endTrade(tr, '오류');
 
+    const pa = players.get(tr.a), pb = players.get(tr.b);
+    const smA = safeMsg(pa, pb), smB = safeMsg(pb, pa);
+    if (smA || smB) {
+      sendTo(tr.a, { type: 'trade_err', error: smA || smB });
+      sendTo(tr.b, { type: 'trade_err', error: smB || smA });
+      tr.readyA = 0; tr.readyB = 0;
+      pushUpdate(tr);
+      return;
+    }
     const A = ensurePlayer(userA), B = ensurePlayer(userB);
     const err = hasOffer(A, tr.offerA) || hasOffer(B, tr.offerB);
     if (err) {

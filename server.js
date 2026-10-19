@@ -2562,7 +2562,8 @@ const players=new Map(), socketsByIp=new Map(), wsById=new Map();
 const trade = require('./trade')({
   players, wsById,
   getDb: () => db,
-  ensurePlayer, sendTo, msgTo, persistSoon
+  ensurePlayer, sendTo, msgTo, persistSoon,
+  inSafe: inSafeAny   // 시작마을/천사마을/성운 착륙장/우주선 = 안전지대
 });
 
 function allowedOrigin(origin,req){if(!origin)return false;if(ALLOWED_ORIGINS.has(origin))return true;try{const u=new URL(origin),secure=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https';return u.host===req.headers.host&&u.protocol===(secure?'https:':'http:');}catch{return false;}}
