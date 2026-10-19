@@ -163,7 +163,12 @@ const SHOP_W = [
   {name:'천뢰의 파멸검',cost:36000000},  // 27
   {name:'창세의 신검',cost:44000000},    // 28
   {name:'천상천하의 창',cost:52000000},  // 29
-  {name:'신성한 성운검',cost:84000000}     // 30: 성운의 별검 가격의 2배
+  {name:'신성한 성운검',cost:84000000},  // 30
+  // 올림포스 신기 (신기 상인 · 클라이언트 GODSHOP idx 31~34)
+  {name:'제우스의 번개',cost:1000000000}, // 31
+  {name:'아레스의 창',cost:500000000},    // 32
+  {name:'포세이돈의 창',cost:700000000},  // 33
+  {name:'아폴로의 활',cost:600000000}     // 34
 ];
 const SHOP_A = [
   null, // 0 천 옷
@@ -300,16 +305,18 @@ Object.assign(WORLD.ZT,{olympusduelist:'godarena',stormgladiator:'godarena',aegi
 WORLD.BOSS.areschampion=[910,-1150];
 // ===== /신(GOD) 지역 =====
 
-// ===== 성운 지역 (신규 지역: 별빛 섬) =====
-WORLD.ZD.nebula = [[1160,1420,-1510,-1240]];
+// ===== 성운 지역 · 제3지역(미완성) — 몬스터는 전부 제우스보다 강함 =====
+WORLD.ZD.nebula = [[1140,1500,-1620,-1220]];
 Object.assign(WORLD.MT, {
-  starguard:{hp:420000,dmg:3200,xp:180000,g:90000,sp:5.5,reach:3.2,rt:18,sc:1.7,n:8,ag:25,cd:1.7,nm:'별빛 수호자'},
-  nebulafox:{hp:360000,dmg:2800,xp:150000,g:75000,sp:8.5,reach:2.7,rt:14,sc:1.3,n:10,ag:24,cd:1.4,nm:'성운 여우'},
-  astralmage:{hp:520000,dmg:3900,xp:220000,g:110000,sp:4.8,reach:3.0,rt:16,sc:1.5,n:7,ag:28,cd:1.8,nm:'성운 마도사'},
-  astralguardian:{hp:4200000,dmg:6200,xp:1200000,g:650000,sp:4.5,reach:6.5,rt:360,sc:3.4,n:1,ag:36,cd:2,boss:1,fix:[1290,-1370],nm:'성운 수호왕'}
+  starguard:{hp:52000000,dmg:9800,xp:6500000,g:3200000,sp:6.2,reach:4.2,rt:22,sc:2.4,n:8,ag:55,cd:1.5,nm:'성운 수호병'},
+  nebulafox:{hp:48000000,dmg:9200,xp:5800000,g:2800000,sp:9.0,reach:3.6,rt:18,sc:2.0,n:10,ag:52,cd:1.3,nm:'성운 여우'},
+  astralmage:{hp:65000000,dmg:12000,xp:8200000,g:4000000,sp:5.5,reach:4.0,rt:20,sc:2.2,n:7,ag:58,cd:1.6,nm:'성운 마도사'},
+  voidcrawler:{hp:75000000,dmg:13500,xp:9500000,g:4800000,sp:7.2,reach:4.5,rt:22,sc:2.6,n:6,ag:60,cd:1.5,nm:'보이드 크롤러'},
+  nebulaknight:{hp:90000000,dmg:15000,xp:12000000,g:6000000,sp:5.8,reach:5.0,rt:24,sc:2.9,n:4,ag:65,cd:1.7,nm:'성운 기사'},
+  astralguardian:{hp:180000000,dmg:22000,xp:35000000,g:18000000,sp:5.5,reach:9.5,rt:600,sc:5.0,n:1,ag:100,cd:2.0,boss:1,fix:[1360,-1480],nm:'성운 수호왕'}
 });
-Object.assign(WORLD.ZT, {starguard:'nebula',nebulafox:'nebula',astralmage:'nebula',astralguardian:'nebula'});
-WORLD.BOSS.astralguardian=[1290,-1370];
+Object.assign(WORLD.ZT, {starguard:'nebula',nebulafox:'nebula',astralmage:'nebula',voidcrawler:'nebula',nebulaknight:'nebula',astralguardian:'nebula'});
+WORLD.BOSS.astralguardian=[1360,-1480];
 // ===== /성운 지역 =====
 
 // ===== /심연 지대 =====
@@ -319,13 +326,16 @@ const ZT = WORLD.ZT;
 const BK = WORLD.BK;
 const BOSS_POS = Object.values(WORLD.BOSS);
 const ALLR = Object.values(ZONE_RECTS).flat();
-const AOI_RADIUS = 260;          // 이 거리 안의 몬스터 변화만 각 플레이어에게 전송
+const AOI_RADIUS = 480;          // 이 거리 안의 몬스터 변화만 각 플레이어에게 전송
 const inSafe = (x, z) => Math.abs(x) <= 42 && Math.abs(z) <= 42; // 시작마을 전체(정사각형 ±24 + 여유) = 안전지대
 const VILLAGE_R = 18;            // 마을 반경 (몬스터 진입/공격 불가)
 // 신(GOD) 지역 천사마을: 몬스터 스폰/진입 금지 + 보스 공격·PvP 무효 (클라이언트 ANGEL_VIL 과 동일 좌표)
 const ANGEL_VILLAGE = { x0:828, x1:912, z0:-982, z1:-906 };
 const inAngelVillage = (x, z) => x >= ANGEL_VILLAGE.x0 && x <= ANGEL_VILLAGE.x1 && z >= ANGEL_VILLAGE.z0 && z <= ANGEL_VILLAGE.z1;
-const inSafeAny = (x, z) => inSafe(x, z) || inAngelVillage(x, z);
+// 성운 지역 우주마을 (안전지대)
+const SPACE_VILLAGE = { x0:1190, x1:1270, z0:-1390, z1:-1310 };
+const inSpaceVillage = (x, z) => x >= SPACE_VILLAGE.x0 && x <= SPACE_VILLAGE.x1 && z >= SPACE_VILLAGE.z0 && z <= SPACE_VILLAGE.z1;
+const inSafeAny = (x, z) => inSafe(x, z) || inAngelVillage(x, z) || inSpaceVillage(x, z);
 // 수정 쉴드 보스 전용 격리 구역 (다른 몬스터 진입 불가)
 // 보스 신전/신구역: 다른 몬스터 스폰 금지 + 플레이어 어그로 차단
 const BOSS_EXCLUSION = [
@@ -355,7 +365,7 @@ function pickPos(type) {
     for (const q of rs) { a -= (q[1] - q[0]) * (q[3] - q[2]); if (a <= 0) { r = q; break; } }
     const x = rnd(r[0] + 5, r[1] - 5), z = rnd(r[2] + 5, r[3] - 5);
     if (!inW(x, z)) continue;
-    if (inAngelVillage(x, z)) continue; // 천사마을 안에는 몬스터 스폰 금지
+    if (inAngelVillage(x, z) || inSpaceVillage(x, z)) continue; // 천사마을·우주마을 안에는 몬스터 스폰 금지
     if (BOSS_POS.some(b => Math.hypot(x - b[0], z - b[1]) < 45)) continue; // 쉴드 보스 주변은 다른 몬스터 스폰 금지
     if (!d.boss && nearBossExclusion(x, z)) continue;
     return [x, z];
@@ -393,7 +403,7 @@ function monsterSnapshot() { return [...monsters.values()].map(monsterFull); }
 // 플레이어가 몬스터를 타격 (클라이언트가 보고한 피해량 — 거리/빈도/상한을 서버가 검증)
 // ★ 보스 밸런스: 무기가 아무리 강해도 보스는 "한 번에 / 1초에" 받는 피해에 상한이 있다.
 //   BOSS_CAP[type] = 한 명이 최대 딜로 때려도 최소 이만큼(초)은 걸려야 잡히는 시간.
-const BOSS_CAP = { kingslime:15, wolfalpha:20, goblinking:30, lich:40, frostgiant:50, pharaoh:60, hydra:70, balrog:80, dragon:75, demonlord:100, worldboss:400, archangel:90, heavenlord:150, zeus:1200, godsentinel:1600 }
+const BOSS_CAP = { kingslime:15, wolfalpha:20, goblinking:30, lich:40, frostgiant:50, pharaoh:60, hydra:70, balrog:80, dragon:75, demonlord:100, worldboss:400, archangel:90, heavenlord:150, zeus:1200, godsentinel:1600, astralguardian:2500, nebulaknight:1800 }
 const BOSS_CAP_SCALE = 0.5;   // ★ 보스 최소 처치시간 배율 (1=원래, 0.5=절반 → 상한 DPS 2배, 0.25=4배). 보스가 너무 안 닳으면 낮추세요
 const WB_TEAM_CAP = 0.015;   // 월드 보스: 전체 플레이어 합산 초당 최대 1.5% (최소 약 67초)
 function bossLimit(m, d, ws, dmg) {
@@ -1028,6 +1038,8 @@ function tickMonsters(dt, now) {
     if (!inW(m.x, m.z)) { m.x = m.px; m.z = m.pz; } else { m.px = m.x; m.pz = m.z; }
     const er = Math.hypot(m.x, m.z);
     if (er < VILLAGE_R && er > 0) { m.x *= VILLAGE_R / er; m.z *= VILLAGE_R / er; }
+    if (inSpaceVillage(m.x, m.z)) { const A = SPACE_VILLAGE, dl = m.x - A.x0, dr = A.x1 - m.x, dn = m.z - A.z0, ds = A.z1 - m.z, mn = Math.min(dl, dr, dn, ds);
+      if (mn === dl) m.x = A.x0 - 2; else if (mn === dr) m.x = A.x1 + 2; else if (mn === dn) m.z = A.z0 - 2; else m.z = A.z1 + 2; }
     if (inAngelVillage(m.x, m.z)) { // 천사마을 진입 방지: 가장 가까운 가장자리 밖으로 밀어낸다
       const A = ANGEL_VILLAGE, dl = m.x - A.x0, dr = A.x1 - m.x, dn = m.z - A.z0, ds = A.z1 - m.z, mn = Math.min(dl, dr, dn, ds);
       if (mn === dl) m.x = A.x0 - 1; else if (mn === dr) m.x = A.x1 + 1; else if (mn === dn) m.z = A.z0 - 1; else m.z = A.z1 + 1;
@@ -1037,19 +1049,64 @@ function tickMonsters(dt, now) {
   }
 }
 
-// 각 접속자에게 "자기 주변(AOI)에서 바뀐 몬스터"만 전송 (대역폭 절약)
+// 각 접속자에게 "자기 주변(AOI)에서 바뀐 몬스터"만 전송
+// + AOI에 새로 들어온 몬스터는 ver 무관하게 풀 스냅샷 전송 (동접 시 일부 클라에 몬스터 안 보이는 버그 수정)
 function broadcastMonsters() {
+  const now = Date.now();
   for (const ws of wss.clients) {
     const p = ws.player;
-    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen || ws.bufferedAmount > 1e6) continue;
+    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen) continue;
+    if (ws.bufferedAmount > 2.5e6) continue; // 과부하 시에만 스킵 (기존 1e6은 동접 시 과도하게 드롭됨)
+    if (!ws._aoi) ws._aoi = new Set();
     const out = [];
+    const full = []; // 새로 시야에 들어온 몬스터 (type 포함)
+    const still = new Set();
     for (const m of monsters.values()) {
+      const dist = Math.hypot(m.x - p.x, m.z - p.z);
+      if (dist > AOI_RADIUS) continue;
+      still.add(m.id);
+      const newly = !ws._aoi.has(m.id);
+      if (newly) {
+        ws._aoi.add(m.id);
+        ws._seen.set(m.id, m.ver);
+        full.push(monsterFull(m));
+        continue;
+      }
       if (ws._seen.get(m.id) === m.ver) continue;
-      if (Math.hypot(m.x - p.x, m.z - p.z) > AOI_RADIUS) continue;
       ws._seen.set(m.id, m.ver);
       out.push([m.id, q2(m.x), q2(m.z), Math.ceil(m.hp), q2(m.face), (m.dead ? 1 : 0) | (m.atk ? 2 : 0)]);
     }
-    if (out.length) { try { ws.send(JSON.stringify({ type: 'mon', m: out })); } catch {} }
+    // AOI 밖으로 나간 id 정리
+    for (const id of ws._aoi) if (!still.has(id)) ws._aoi.delete(id);
+
+    // 주기적 풀 재동기화 (5초마다 주변 몬스터 전체) — 패킷 유실/드롭 복구
+    if (!ws._monResyncAt || now >= ws._monResyncAt) {
+      ws._monResyncAt = now + 5000;
+      const resync = [];
+      for (const m of monsters.values()) {
+        if (Math.hypot(m.x - p.x, m.z - p.z) > AOI_RADIUS) continue;
+        ws._seen.set(m.id, m.ver);
+        ws._aoi.add(m.id);
+        resync.push(monsterFull(m));
+      }
+      if (resync.length) {
+        // 청크 전송 (한 패킷 과다 방지)
+        for (let i = 0; i < resync.length; i += 60) {
+          try { ws.send(JSON.stringify({ type: 'mon_full', m: resync.slice(i, i + 60) })); } catch {}
+        }
+      }
+    } else {
+      if (full.length) {
+        for (let i = 0; i < full.length; i += 60) {
+          try { ws.send(JSON.stringify({ type: 'mon_full', m: full.slice(i, i + 60) })); } catch {}
+        }
+      }
+      if (out.length) {
+        for (let i = 0; i < out.length; i += 100) {
+          try { ws.send(JSON.stringify({ type: 'mon', m: out.slice(i, i + 100) })); } catch {}
+        }
+      }
+    }
   }
   for (const m of monsters.values()) m.atk = 0;
 }
@@ -1178,7 +1235,7 @@ function ensurePlayer(key){
 }
 // ===== 저장 데이터 보강: 알려지지 않은 클라이언트 필드도 (크기 제한 안에서) MongoDB 에 보존 =====
 const SAFE_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
-const KNOWN_PLAYER_KEYS = new Set(['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg','pot','ow','oa','sw','items','qa','qd','questProgress','godUnlocked','hadesSword','godQuestAccepted','godQuestDone','job','msUnlocked','bmUnlocked','jstep','jm','jhp','we','ae','rebirth','rcoin','title','achievementIds','unlockedTitles','equippedTitle','deathSkills','deathLives','deathReborn','deathCutsceneDone','talents','talentPts','runes','runeEq','towerBest','towerDaily','towerDailyAt','rstat','rbMult','sbk','sks','look','bank','stats','guild','party']);
+const KNOWN_PLAYER_KEYS = new Set(['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg','pot','ow','oa','sw','items','qa','qd','questProgress','godUnlocked','hadesSword','godQuestAccepted','godQuestDone','job','msUnlocked','bmUnlocked','tkUnlocked','jstep','jm','jhp','we','ae','rebirth','rcoin','title','achievementIds','unlockedTitles','equippedTitle','deathSkills','deathLives','deathReborn','deathCutsceneDone','talents','talentPts','runes','runeEq','towerBest','towerDaily','towerDailyAt','rstat','rbMult','sbk','sks','look','bank','stats','guild','party']);
 function cleanExtraVal(v, depth) {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return Number.isFinite(v) ? Math.max(-1e12, Math.min(1e12, v)) : undefined;
@@ -1219,13 +1276,13 @@ function cleanState(input){
  const p=input.player,c=input.camera;if(!p||typeof p!=='object'||Array.isArray(p))return null;
  const fields=['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg'],player={};
  for(const k of fields){const v=p[k];if(typeof v==='number'&&Number.isFinite(v)){const cap=(k==='coin'||k==='xp'||k==='nx')?1e9:1000000;player[k]=Math.max(-cap,Math.min(cap,v));}}
- player.x=Math.max(-1100,Math.min(1100,Number(player.x)||0));player.z=Math.max(-2400,Math.min(400,Number(player.z)||0));
+ player.x=Math.max(-1600,Math.min(1600,Number(player.x)||0));player.z=Math.max(-1800,Math.min(500,Number(player.z)||0));
  player.lv=Math.max(1,Math.min(1e6,Math.floor(Number(player.lv)||1)));player.mhp=Math.max(1,Math.min(100000,Number(player.mhp)||100));player.hp=Math.max(0,Math.min(player.mhp,Number(player.hp)||0));
  player.coin=Math.max(0,Math.min(1e9,Math.floor(Number(player.coin)||0)));player.xp=Math.max(0,Math.min(1e9,Math.floor(Number(player.xp)||0)));
  player.pot=Array.isArray(p.pot)?p.pot.slice(0,8).map(v=>Math.max(0,Math.min(999,Math.floor(Number(v)||0)))):[2,0,0,0];
- if(Array.isArray(p.ow)) player.ow=p.ow.filter(v=>Number.isInteger(v)&&v>=0&&v<40).slice(0,40);
- if(Array.isArray(p.oa)) player.oa=p.oa.filter(v=>Number.isInteger(v)&&v>=0&&v<40).slice(0,40);
- if(Array.isArray(p.sw)) player.sw=[...new Set(p.sw.filter(v=>Number.isInteger(v)&&v>=0&&v<40&&![21,22,23,24].includes(v)))].slice(0,40);
+ if(Array.isArray(p.ow)) player.ow=p.ow.filter(v=>Number.isInteger(v)&&v>=0&&v<80).slice(0,80);
+ if(Array.isArray(p.oa)) player.oa=p.oa.filter(v=>Number.isInteger(v)&&v>=0&&v<80).slice(0,80);
+ if(Array.isArray(p.sw)) player.sw=[...new Set(p.sw.filter(v=>Number.isInteger(v)&&v>=0&&v<80&&![21,22,23,24].includes(v)))].slice(0,80);
  if(p.items && typeof p.items==='object' && !Array.isArray(p.items)){
   const it={};let n=0;
   for(const [k,v] of Object.entries(p.items)){
@@ -1264,6 +1321,7 @@ function cleanState(input){
  if(typeof p.job==='string'&&/^[a-z_]{1,24}$/.test(p.job)) player.job=p.job;
  if(p.msUnlocked===true||p.job==='magesword') player.msUnlocked=true;
  if(p.bmUnlocked===true||p.job==='bloodmage') player.bmUnlocked=true;
+ if(p.tkUnlocked===true||p.job==='tanker') player.tkUnlocked=true;
  if(Number.isFinite(Number(p.jstep))) player.jstep=Math.max(0,Math.min(10,Number(p.jstep)));
  if(Number.isFinite(Number(p.jm))) player.jm=Math.max(0.1,Math.min(5,Number(p.jm)));
  if(Number.isFinite(Number(p.jhp))) player.jhp=Math.max(0.1,Math.min(5,Number(p.jhp)));
@@ -1470,7 +1528,7 @@ function requireAdmin(req,res,next){
   req.userKey=key; next();
 }
 // ===== 관리자 등급: ADMIN(최고 관리자) / 임명된 어드민 =====
-const SUB_ADMIN_MAX_COIN = 10000000;   // 어드민 1회 코인 지급 한도 (1000만)
+const SUB_ADMIN_MAX_COIN = 100000000;  // 어드민 1회 코인 지급 한도 (1억)
 const SUB_ADMIN_MAX_LEVEL = 1000;      // 어드민 레벨 설정 한도
 function isSuper(key){ return key === usernameKey('ADMIN'); }
 function requireSuper(req,res,next){
@@ -1542,7 +1600,7 @@ app.post('/api/admin/set-level', requireAdmin, (req,res)=>{
   pushAdminStat(key, {lv:p.lv, xp:p.xp, nx:p.nx, hp:p.hp, mhp:p.mhp, coin:p.coin});
   res.json({ok:true, username:db.users[key].username, lv:p.lv, coin:p.coin, mhp:p.mhp});
 });
-app.post('/api/admin/unlock-god', requireAdmin, (req,res)=>{
+app.post('/api/admin/unlock-god', requireSuper, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
@@ -1558,7 +1616,7 @@ app.post('/api/admin/unlock-god', requireAdmin, (req,res)=>{
   for(const pl of players.values()) if(pl.key===key) pl.godUnlocked=true;
   res.json({ok:true,username:db.users[key].username,online, godUnlocked:true});
 });
-app.post('/api/admin/bloodmage', requireAdmin, (req,res)=>{
+app.post('/api/admin/bloodmage', requireSuper, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
@@ -1573,7 +1631,7 @@ app.post('/api/admin/bloodmage', requireAdmin, (req,res)=>{
   for(const pl of players.values()) if(pl.key===key){pl.job='bloodmage';pl.bmUnlocked=true;}
   res.json({ok:true,username:db.users[key].username,online,job:p.job,bmUnlocked:true});
 });
-app.post('/api/admin/magesword', requireAdmin, (req,res)=>{
+app.post('/api/admin/magesword', requireSuper, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
@@ -1589,7 +1647,7 @@ app.post('/api/admin/magesword', requireAdmin, (req,res)=>{
   res.json({ok:true,username:db.users[key].username,online,job:p.job,msUnlocked:true,godUnlocked:true});
 });
 
-app.post('/api/admin/set-rebirth', requireAdmin, (req,res)=>{
+app.post('/api/admin/set-rebirth', requireSuper, (req,res)=>{
   const {username, rebirth} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const rb=Math.floor(Number(rebirth));
@@ -2700,7 +2758,8 @@ wss.on('connection',ws=>{
 
   // 접속 시: 다른 플레이어 + 서버 몬스터 전체 상태 전송
   ws._seen=new Map();
-  for(const m of monsters.values()) ws._seen.set(m.id,m.ver);
+  ws._seen=new Map(); ws._aoi=new Set(); ws._monResyncAt=0;
+  for(const m of monsters.values()){ ws._seen.set(m.id,m.ver); /* welcome 스냅샷으로 전체 전달, AOI는 이동 후 채움 */ }
   ws.send(JSON.stringify({
     type:'welcome',
     id,
@@ -2761,11 +2820,23 @@ wss.on('connection',ws=>{
       const targetPlayer=[...players.values()].find(x=>x.id===m.targetId);
       if(!targetPlayer||!targetPlayer.pvp) return;
       const dist=Math.hypot(targetPlayer.x-p.x, targetPlayer.z-p.z);
-      if(dist>8) return;
+      if(dist>12) return;
       if(inSafeAny(p.x,p.z)||inSafeAny(targetPlayer.x,targetPlayer.z)) return;
-      const dmg=Math.max(1,Math.floor(Math.max(1,Math.min(500,Math.floor(m.dmg)))*dmgTakenMult(targetPlayer,now)));
+      const dmg=Math.max(1,Math.floor(Math.max(1,Math.min(50000,Math.floor(m.dmg)))*dmgTakenMult(targetPlayer,now)));
       targetPlayer.hp=Math.max(0,(targetPlayer.hp||100)-dmg);
       broadcastAll({type:'pvp_damage', from:p.id, to:targetPlayer.id, dmg, hp:targetPlayer.hp, name:p.name});
+      return;
+    }
+
+    if(m.type==='party_buff'){
+      if(now-(ws._pbT||0)<500) return; ws._pbT=now;
+      const pt=partyOf(p); if(!pt) return;
+      const buff=String(m.buff||'').slice(0,24);
+      const val=Math.max(0,Math.min(1e9,Math.floor(Number(m.val)||0)));
+      const dur=Math.max(0,Math.min(120,Number(m.dur)||0));
+      for(const id of pt.members){
+        try{ sendTo(id,{type:'party_buff',buff,from:p.id,name:p.name,val,dur}); }catch{}
+      }
       return;
     }
 
