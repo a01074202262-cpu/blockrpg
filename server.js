@@ -163,12 +163,11 @@ const SHOP_W = [
   {name:'천뢰의 파멸검',cost:36000000},  // 27
   {name:'창세의 신검',cost:44000000},    // 28
   {name:'천상천하의 창',cost:52000000},  // 29
-  {name:'신성한 성운검',cost:84000000},  // 30
-  // 올림포스 신기 (신기 상인 · 클라이언트 GODSHOP idx 31~34)
-  {name:'제우스의 번개',cost:1000000000}, // 31
-  {name:'아레스의 창',cost:500000000},    // 32
-  {name:'포세이돈의 창',cost:700000000},  // 33
-  {name:'아폴로의 활',cost:600000000}     // 34
+  {name:'신성한 성운검',cost:84000000},    // 30: 성운의 별검 가격의 2배
+  {name:'제우스의 번개',cost:1000000000},  // 31 올림포스 신기
+  {name:'아레스의 창',cost:500000000},     // 32
+  {name:'포세이돈의 창',cost:700000000},   // 33
+  {name:'아폴로의 활',cost:600000000}      // 34
 ];
 const SHOP_A = [
   null, // 0 천 옷
@@ -305,18 +304,26 @@ Object.assign(WORLD.ZT,{olympusduelist:'godarena',stormgladiator:'godarena',aegi
 WORLD.BOSS.areschampion=[910,-1150];
 // ===== /신(GOD) 지역 =====
 
-// ===== 성운 지역 · 제3지역(미완성) — 몬스터는 전부 제우스보다 강함 =====
-WORLD.ZD.nebula = [[1140,1500,-1620,-1220]];
+// ===== 성운 지역 (신규 지역: 별빛 섬) =====
+WORLD.ZD.nebula = [[1160,1420,-1510,-1240]];
+WORLD.ZD.ship = [[1500,1560,-1200,-1160]]; // 우주선 내부 (몬스터 없음)
+WORLD.ZD.station = [[1520,1780,-1500,-1250]]; // 국제 우주정거장 (성운 지역에서 이동)
 Object.assign(WORLD.MT, {
-  starguard:{hp:52000000,dmg:9800,xp:6500000,g:3200000,sp:6.2,reach:4.2,rt:22,sc:2.4,n:8,ag:55,cd:1.5,nm:'성운 수호병'},
-  nebulafox:{hp:48000000,dmg:9200,xp:5800000,g:2800000,sp:9.0,reach:3.6,rt:18,sc:2.0,n:10,ag:52,cd:1.3,nm:'성운 여우'},
-  astralmage:{hp:65000000,dmg:12000,xp:8200000,g:4000000,sp:5.5,reach:4.0,rt:20,sc:2.2,n:7,ag:58,cd:1.6,nm:'성운 마도사'},
-  voidcrawler:{hp:75000000,dmg:13500,xp:9500000,g:4800000,sp:7.2,reach:4.5,rt:22,sc:2.6,n:6,ag:60,cd:1.5,nm:'보이드 크롤러'},
-  nebulaknight:{hp:90000000,dmg:15000,xp:12000000,g:6000000,sp:5.8,reach:5.0,rt:24,sc:2.9,n:4,ag:65,cd:1.7,nm:'성운 기사'},
-  astralguardian:{hp:180000000,dmg:22000,xp:35000000,g:18000000,sp:5.5,reach:9.5,rt:600,sc:5.0,n:1,ag:100,cd:2.0,boss:1,fix:[1360,-1480],nm:'성운 수호왕'}
+  stationdrone:{hp:70000000,dmg:20500,xp:4000000,g:2000000,sp:6.5,reach:2.8,rt:14,sc:1.2,n:9,ag:55,cd:1.5,nm:'정거장 드론'},
+  spacemarine:{hp:75000000,dmg:21000,xp:4400000,g:2200000,sp:5.2,reach:3.0,rt:16,sc:1.6,n:8,ag:55,cd:1.7,nm:'우주 해병'},
+  cosmicwatcher:{hp:82000000,dmg:21500,xp:4800000,g:2400000,sp:4.6,reach:3.2,rt:18,sc:1.8,n:6,ag:55,cd:1.8,nm:'우주 감시자'},
+  stationcore:{hp:300000000,dmg:38000,xp:30000000,g:15000000,sp:4.5,reach:7,rt:480,sc:3.6,n:1,ag:75,cd:2,boss:1,fix:[1700,-1375],nm:'정거장 관제 AI'}
 });
-Object.assign(WORLD.ZT, {starguard:'nebula',nebulafox:'nebula',astralmage:'nebula',voidcrawler:'nebula',nebulaknight:'nebula',astralguardian:'nebula'});
-WORLD.BOSS.astralguardian=[1360,-1480];
+Object.assign(WORLD.ZT, {stationdrone:'station',spacemarine:'station',cosmicwatcher:'station',stationcore:'station'});
+WORLD.BOSS.stationcore=[1700,-1375];
+Object.assign(WORLD.MT, {
+  starguard:{hp:90000000,dmg:22000,xp:6000000,g:3000000,sp:5.5,reach:3.2,rt:18,sc:1.7,n:8,ag:60,cd:1.7,nm:'별빛 수호자'},
+  nebulafox:{hp:80000000,dmg:21000,xp:5000000,g:2500000,sp:8.5,reach:2.7,rt:14,sc:1.3,n:10,ag:60,cd:1.4,nm:'성운 여우'},
+  astralmage:{hp:100000000,dmg:24000,xp:7000000,g:3500000,sp:4.8,reach:3.0,rt:16,sc:1.5,n:7,ag:60,cd:1.8,nm:'성운 마도사'},
+  astralguardian:{hp:600000000,dmg:45000,xp:60000000,g:30000000,sp:4.5,reach:6.5,rt:360,sc:3.4,n:1,ag:80,cd:2,boss:1,fix:[1290,-1370],nm:'성운 수호왕'}
+});
+Object.assign(WORLD.ZT, {starguard:'nebula',nebulafox:'nebula',astralmage:'nebula',astralguardian:'nebula'});
+WORLD.BOSS.astralguardian=[1290,-1370];
 // ===== /성운 지역 =====
 
 // ===== /심연 지대 =====
@@ -326,16 +333,20 @@ const ZT = WORLD.ZT;
 const BK = WORLD.BK;
 const BOSS_POS = Object.values(WORLD.BOSS);
 const ALLR = Object.values(ZONE_RECTS).flat();
-const AOI_RADIUS = 480;          // 이 거리 안의 몬스터 변화만 각 플레이어에게 전송
+const AOI_RADIUS = 260;          // 이 거리 안의 몬스터 변화만 각 플레이어에게 전송
 const inSafe = (x, z) => Math.abs(x) <= 42 && Math.abs(z) <= 42; // 시작마을 전체(정사각형 ±24 + 여유) = 안전지대
 const VILLAGE_R = 18;            // 마을 반경 (몬스터 진입/공격 불가)
 // 신(GOD) 지역 천사마을: 몬스터 스폰/진입 금지 + 보스 공격·PvP 무효 (클라이언트 ANGEL_VIL 과 동일 좌표)
 const ANGEL_VILLAGE = { x0:828, x1:912, z0:-982, z1:-906 };
 const inAngelVillage = (x, z) => x >= ANGEL_VILLAGE.x0 && x <= ANGEL_VILLAGE.x1 && z >= ANGEL_VILLAGE.z0 && z <= ANGEL_VILLAGE.z1;
-// 성운 지역 우주마을 (안전지대)
-const SPACE_VILLAGE = { x0:1190, x1:1270, z0:-1390, z1:-1310 };
-const inSpaceVillage = (x, z) => x >= SPACE_VILLAGE.x0 && x <= SPACE_VILLAGE.x1 && z >= SPACE_VILLAGE.z0 && z <= SPACE_VILLAGE.z1;
-const inSafeAny = (x, z) => inSafe(x, z) || inAngelVillage(x, z) || inSpaceVillage(x, z);
+const SAFE_PADS = [   // 성운 착륙장 / 성운→정거장 게이트 / 정거장 귀환 게이트: 몬스터 스폰·진입 금지
+  { x0:1160, x1:1196, z0:-1282, z1:-1240 },
+  { x0:1384, x1:1420, z0:-1398, z1:-1352 },
+  { x0:1520, x1:1556, z0:-1398, z1:-1352 }
+];
+const inNebPad = (x, z) => SAFE_PADS.some(N => x >= N.x0 && x <= N.x1 && z >= N.z0 && z <= N.z1);
+const inShip = (x, z) => x >= 1500 && x <= 1560 && z >= -1200 && z <= -1160;
+const inSafeAny = (x, z) => inSafe(x, z) || inAngelVillage(x, z) || inNebPad(x, z) || inShip(x, z);
 // 수정 쉴드 보스 전용 격리 구역 (다른 몬스터 진입 불가)
 // 보스 신전/신구역: 다른 몬스터 스폰 금지 + 플레이어 어그로 차단
 const BOSS_EXCLUSION = [
@@ -365,7 +376,8 @@ function pickPos(type) {
     for (const q of rs) { a -= (q[1] - q[0]) * (q[3] - q[2]); if (a <= 0) { r = q; break; } }
     const x = rnd(r[0] + 5, r[1] - 5), z = rnd(r[2] + 5, r[3] - 5);
     if (!inW(x, z)) continue;
-    if (inAngelVillage(x, z) || inSpaceVillage(x, z)) continue; // 천사마을·우주마을 안에는 몬스터 스폰 금지
+    if (inAngelVillage(x, z)) continue; // 천사마을 안에는 몬스터 스폰 금지
+    if (inNebPad(x, z)) continue;
     if (BOSS_POS.some(b => Math.hypot(x - b[0], z - b[1]) < 45)) continue; // 쉴드 보스 주변은 다른 몬스터 스폰 금지
     if (!d.boss && nearBossExclusion(x, z)) continue;
     return [x, z];
@@ -403,7 +415,7 @@ function monsterSnapshot() { return [...monsters.values()].map(monsterFull); }
 // 플레이어가 몬스터를 타격 (클라이언트가 보고한 피해량 — 거리/빈도/상한을 서버가 검증)
 // ★ 보스 밸런스: 무기가 아무리 강해도 보스는 "한 번에 / 1초에" 받는 피해에 상한이 있다.
 //   BOSS_CAP[type] = 한 명이 최대 딜로 때려도 최소 이만큼(초)은 걸려야 잡히는 시간.
-const BOSS_CAP = { kingslime:15, wolfalpha:20, goblinking:30, lich:40, frostgiant:50, pharaoh:60, hydra:70, balrog:80, dragon:75, demonlord:100, worldboss:400, archangel:90, heavenlord:150, zeus:1200, godsentinel:1600, astralguardian:2500, nebulaknight:1800 }
+const BOSS_CAP = { kingslime:15, wolfalpha:20, goblinking:30, lich:40, frostgiant:50, pharaoh:60, hydra:70, balrog:80, dragon:75, demonlord:100, worldboss:400, archangel:90, heavenlord:150, zeus:1200, godsentinel:1600 }
 const BOSS_CAP_SCALE = 0.5;   // ★ 보스 최소 처치시간 배율 (1=원래, 0.5=절반 → 상한 DPS 2배, 0.25=4배). 보스가 너무 안 닳으면 낮추세요
 const WB_TEAM_CAP = 0.015;   // 월드 보스: 전체 플레이어 합산 초당 최대 1.5% (최소 약 67초)
 function bossLimit(m, d, ws, dmg) {
@@ -448,7 +460,8 @@ function applyPlayerHit(p, ws, id, dmg, kb, elem) {
   const d = MT[m.type];
   const dx = m.x - p.x, dz = m.z - p.z, dist = Math.hypot(dx, dz);
   if (elem !== 'scythethrow' && dist > d.reach + d.sc * 1.5 + 30) return;            // 너무 먼 몬스터는 타격 불가
-  dmg = Math.max(1, Math.min(MAX_HIT_DMG, Math.floor(dmg)));
+  const hitCap = Math.max(MAX_HIT_DMG, Math.floor((Number(m.mhp) || 0) * 0.02));   // 고체력(성운/정거장) 몬스터는 최대 체력의 2%까지 1타 허용
+  dmg = Math.max(1, Math.min(hitCap, Math.floor(dmg)));
   if (elem !== 'spear' && elem !== 'scythethrow') p.lastHit = dmg;                       // 죽음의 창 기준 데미지(클라가 bd 를 안 보낼 때 대체값)
   if (deathOn(p, 'scythe')) dmg = Math.floor(dmg * DEATH_SCYTHE_MULT);   // 죽음의 낫: 데미지 5배
   if (false && m.shield && m.shield.crystal) {   // 보스 쉴드 비활성화
@@ -544,6 +557,15 @@ function killMonster(m, d, p) {
   }
 }
 const MAX_HIT_DMG = 500000;
+// 레벨업에 필요한 경험치: Lv1=30. 올라가는 레벨 기준 배율 — ~Lv40: x1.5 / 41~99: x1.2 / 100~299: x1.1 / 300~: x1.05
+const NX_CAP = Number.MAX_SAFE_INTEGER;
+function nxMult(lv) { return lv <= 40 ? 1.5 : lv <= 99 ? 1.2 : lv <= 299 ? 1.1 : 1.05; }
+function nxForLevel(lv) {
+  lv = Math.max(1, Math.floor(Number(lv) || 1));
+  let nx = 30;
+  for (let L = 2; L <= lv; L++) { nx *= nxMult(L); if (nx >= NX_CAP) return NX_CAP; }
+  return Math.max(30, Math.floor(nx));
+}
 
 // ===================================================================================
 //  죽음의 신 (환생 500회 달성 시 전직) — 스킬/패시브는 전부 서버 권한
@@ -555,10 +577,8 @@ const DEATH_GUIDE_RANGE = 50;                       // 죽음의 인도 판정 �
 const DEATH_GUIDE_EXCLUDE = new Set(['zeus', 'areschampion']);   // 제우스, 아레스는 즉사 면역
 const DEATH_SCYTHE_MULT = 5;                        // 죽음의 낫 데미지 배율
 const DEATH_EVADE_MS = 60000, DEATH_EVADE_CD = 120000, DEATH_EVADE_MULT = 0.1;   // 약 1분 받는 피해 x0.1 / 쿨 2분
-const DEATH_SPEAR_COUNT = 15, DEATH_SPEAR_RANGE = 20, DEATH_SPEAR_RATE = 0.15;
-const DEATH_SPEAR_INTERVAL = 100;      // 창 쿨타임 확인 주기(ms)
-const DEATH_SPEAR_CD = 1500;           // 창 1개당 개별 쿨타임(ms)
-const DEATH_SPEAR_STAGGER = 100;       // 창끼리 발사 시점을 어긋나게 하는 간격(ms)
+const DEATH_SPEAR_COUNT = 15, DEATH_SPEAR_RANGE = 20, DEATH_SPEAR_RATE = 0.15, DEATH_SPEAR_INTERVAL = 600;
+const DEATH_SPEAR_CD = 600;   // 창 1개마다 개별 쿨다운(ms). 15개가 DEATH_SPEAR_CD/15 간격으로 엇갈려 발사됨
 const DEATH_MAX_LIVES = 2, DEATH_REVIVE_INV_MS = 4000;
 const DEATH_SOUL_SPEED = 3;                         // 영혼 모드 이동속도 배율 (대쉬 불가)
 const DEATH_SKILL_IDS = { 1:'guide', 2:'scythe', 3:'evade', 4:'spears', 5:'throw', 6:'soul', 7:'harvest', 8:'execution', guide:'guide', scythe:'scythe', evade:'evade', spears:'spears', soul:'soul', harvest:'harvest', execution:'execution' };
@@ -618,45 +638,38 @@ function deathGuideKill(p, m) {
   m.hp = 0; m.ver++;
   killMonster(m, d, p);
 }
-// 죽음의 창: 15개 각각 독립 쿨타임(DEATH_SPEAR_CD). 쿨이 돈 창만 발사하며, 창마다 서로 다른 몬스터를 노린다.
-// 창 1개 = 내 기본 데미지의 15%. 몬스터가 창 수보다 적으면 가장 덜 노려진 몬스터에게 겹쳐 배정된다.
+// 죽음의 창: 15개 고정, 창마다 다른 몬스터를 노리고 몬스터가 15마리 미만이면 남는 창을 한 마리씩 더 배정
 function deathSpearsAttack(p, ws, now) {
   now = now || Date.now();
+  const base = (Number(p.baseDmg) > 0 ? Number(p.baseDmg) : Number(p.lastHit)) || 0;
+  // 창마다 자기 쿨다운 보유 (처음엔 서로 엇갈리게 시작)
   if (!Array.isArray(p._spearCd) || p._spearCd.length !== DEATH_SPEAR_COUNT) {
-    p._spearCd = []; p._spearTg = [];
-    for (let i = 0; i < DEATH_SPEAR_COUNT; i++) { p._spearCd.push(now + i * DEATH_SPEAR_STAGGER); p._spearTg.push(0); }
+    p._spearCd = [];
+    for (let i = 0; i < DEATH_SPEAR_COUNT; i++) p._spearCd.push(now + Math.floor(i * DEATH_SPEAR_CD / DEATH_SPEAR_COUNT));
   }
   const ready = [];
   for (let i = 0; i < DEATH_SPEAR_COUNT; i++) if (p._spearCd[i] <= now) ready.push(i);
   if (!ready.length) return;
-  const base = (Number(p.baseDmg) > 0 ? Number(p.baseDmg) : Number(p.lastHit)) || 0;
-  const one = Math.floor(base * DEATH_SPEAR_RATE);   // 창 1개 = 내 데미지의 15%
-  if (one < 1) return;
   const cand = [];
   for (const m of monsters.values()) {
     if (m.dead || m.hp <= 0) continue;
     const dd = Math.hypot(m.x - p.x, m.z - p.z);
     if (dd <= DEATH_SPEAR_RANGE) cand.push([dd, m]);
   }
-  if (!cand.length) return;   // 대상이 없으면 쿨타임을 쓰지 않고 대기
-  // 아직 쿨타임 중인 다른 창들이 최근 노린 몬스터 = 이미 "배정됨"
-  const load = new Map();
-  for (let j = 0; j < DEATH_SPEAR_COUNT; j++) if (p._spearCd[j] > now && p._spearTg[j]) load.set(p._spearTg[j], (load.get(p._spearTg[j]) || 0) + 1);
-  let k = 0;
+  if (!cand.length) return;   // 타겟이 없으면 쿨다운을 소모하지 않고 대기
+  cand.sort((a, b) => a[0] - b[0]);
+  const tg = cand.length > DEATH_SPEAR_COUNT ? cand.slice(0, DEATH_SPEAR_COUNT) : cand;
+  const per = new Map(), assign = [];
   for (const i of ready) {
-    let best = null, bs = Infinity;
-    for (const [dd, m] of cand) {
-      if (m.dead || m.hp <= 0) continue;
-      const sc = (load.get(m.id) || 0) * 1000 + dd;   // 덜 노려진 몬스터 우선, 같으면 가까운 몬스터
-      if (sc < bs) { bs = sc; best = m; }
-    }
-    if (!best) break;
-    load.set(best.id, (load.get(best.id) || 0) + 1);
-    p._spearCd[i] = now + DEATH_SPEAR_CD + k * DEATH_SPEAR_STAGGER; k++;
-    p._spearTg[i] = best.id;
-    sendNear(p.x, p.z, { type: 'death_spears', id: p.id, si: i, t: [best.id], n: DEATH_SPEAR_COUNT }, 150);   // 연출용: i번째 창 → 몬스터
-    applyPlayerHit(p, ws, best.id, one, 0, 'spear');
+    p._spearCd[i] = now + DEATH_SPEAR_CD;   // 이 창만 쿨다운 시작
+    const m = tg[i % tg.length][1];
+    assign.push(m.id); per.set(m, (per.get(m) || 0) + 1);
   }
+  // t: 발사된 창들의 타겟 id, i: 발사된 창 번호(0~14), cd: 창 1개 쿨다운(ms)
+  sendNear(p.x, p.z, { type: 'death_spears', id: p.id, t: assign, i: ready, n: DEATH_SPEAR_COUNT, cd: DEATH_SPEAR_CD }, 150);
+  const one = Math.floor(base * DEATH_SPEAR_RATE);   // 창 1개 = 내 데미지의 15%
+  if (one < 1) return;
+  for (const [m, n] of per) applyPlayerHit(p, ws, m.id, one * n, 0, 'spear');
 }
 // 죽음의 낫 던지기(5번): 회전하는 낫이 150m 날아가며 경로(폭 THROW_WIDTH)의 모든 몬스터를 1회씩 타격, 데미지 = 내 기본 데미지 x10
 const DEATH_THROW_RANGE = 150, DEATH_THROW_SPEED = 90, DEATH_THROW_WIDTH = 7, DEATH_THROW_MULT = 10, DEATH_THROW_CD = 30000;
@@ -691,13 +704,11 @@ function tickDeathThrows(now) {
     if (cur >= DEATH_THROW_RANGE) deathThrows.splice(i, 1);
   }
 }
-let _deathGuideT = 0, _deathSpearT = 0, _deathHarvT = 0;
+let _deathGuideT = 0, _deathSpearT = 0;
 function tickDeath(now) {
   if (deathThrows.length) tickDeathThrows(now);
   const doGuide = now - _deathGuideT >= 200; if (doGuide) _deathGuideT = now;
   const doSpear = now - _deathSpearT >= DEATH_SPEAR_INTERVAL; if (doSpear) _deathSpearT = now;
-  const doHarv = now - _deathHarvT >= 600; if (doHarv) _deathHarvT = now;   // 결계 틱은 기존대로 0.6초
-  if (!doGuide && !doSpear && !doHarv) return;
   for (const ws of wss.clients) {
     const p = ws.player;
     if (!p || ws.readyState !== WebSocket.OPEN || p.hp <= 0) continue;
@@ -709,9 +720,9 @@ function tickDeath(now) {
         if (deathGuideReady(p, m) && Math.hypot(m.x - p.x, m.z - p.z) <= DEATH_GUIDE_RANGE) deathGuideKill(p, m);
       }
     }
-    if (doSpear && ds.spears) deathSpearsAttack(p, ws, now);
+    if (ds.spears) deathSpearsAttack(p, ws, now);
     // 영혼 수확의 결계: 반경 14m 장판 — 주기적으로 근처 몬스터에 기본 데미지 8%
-    if (ds.harvest && doHarv) {
+    if (ds.harvest && doSpear) {
       const base = (Number(p.baseDmg) > 0 ? Number(p.baseDmg) : Number(p.lastHit)) || 0;
       const one = Math.max(1, Math.floor(base * 0.08));
       if (base >= 1) {
@@ -1038,8 +1049,11 @@ function tickMonsters(dt, now) {
     if (!inW(m.x, m.z)) { m.x = m.px; m.z = m.pz; } else { m.px = m.x; m.pz = m.z; }
     const er = Math.hypot(m.x, m.z);
     if (er < VILLAGE_R && er > 0) { m.x *= VILLAGE_R / er; m.z *= VILLAGE_R / er; }
-    if (inSpaceVillage(m.x, m.z)) { const A = SPACE_VILLAGE, dl = m.x - A.x0, dr = A.x1 - m.x, dn = m.z - A.z0, ds = A.z1 - m.z, mn = Math.min(dl, dr, dn, ds);
-      if (mn === dl) m.x = A.x0 - 2; else if (mn === dr) m.x = A.x1 + 2; else if (mn === dn) m.z = A.z0 - 2; else m.z = A.z1 + 2; }
+    for (const N of SAFE_PADS) if (m.x >= N.x0 && m.x <= N.x1 && m.z >= N.z0 && m.z <= N.z1) {
+      const dl = m.x - N.x0, dr = N.x1 - m.x, dn = m.z - N.z0, ds = N.z1 - m.z, mn = Math.min(dl, dr, dn, ds);
+      if (mn === dl) m.x = N.x0 - 1; else if (mn === dr) m.x = N.x1 + 1; else if (mn === dn) m.z = N.z0 - 1; else m.z = N.z1 + 1;
+      if (!inW(m.x, m.z)) { m.x = m.px; m.z = m.pz; } else { m.px = m.x; m.pz = m.z; }
+    }
     if (inAngelVillage(m.x, m.z)) { // 천사마을 진입 방지: 가장 가까운 가장자리 밖으로 밀어낸다
       const A = ANGEL_VILLAGE, dl = m.x - A.x0, dr = A.x1 - m.x, dn = m.z - A.z0, ds = A.z1 - m.z, mn = Math.min(dl, dr, dn, ds);
       if (mn === dl) m.x = A.x0 - 1; else if (mn === dr) m.x = A.x1 + 1; else if (mn === dn) m.z = A.z0 - 1; else m.z = A.z1 + 1;
@@ -1049,64 +1063,19 @@ function tickMonsters(dt, now) {
   }
 }
 
-// 각 접속자에게 "자기 주변(AOI)에서 바뀐 몬스터"만 전송
-// + AOI에 새로 들어온 몬스터는 ver 무관하게 풀 스냅샷 전송 (동접 시 일부 클라에 몬스터 안 보이는 버그 수정)
+// 각 접속자에게 "자기 주변(AOI)에서 바뀐 몬스터"만 전송 (대역폭 절약)
 function broadcastMonsters() {
-  const now = Date.now();
   for (const ws of wss.clients) {
     const p = ws.player;
-    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen) continue;
-    if (ws.bufferedAmount > 2.5e6) continue; // 과부하 시에만 스킵 (기존 1e6은 동접 시 과도하게 드롭됨)
-    if (!ws._aoi) ws._aoi = new Set();
+    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen || ws.bufferedAmount > 1e6) continue;
     const out = [];
-    const full = []; // 새로 시야에 들어온 몬스터 (type 포함)
-    const still = new Set();
     for (const m of monsters.values()) {
-      const dist = Math.hypot(m.x - p.x, m.z - p.z);
-      if (dist > AOI_RADIUS) continue;
-      still.add(m.id);
-      const newly = !ws._aoi.has(m.id);
-      if (newly) {
-        ws._aoi.add(m.id);
-        ws._seen.set(m.id, m.ver);
-        full.push(monsterFull(m));
-        continue;
-      }
       if (ws._seen.get(m.id) === m.ver) continue;
+      if (Math.hypot(m.x - p.x, m.z - p.z) > AOI_RADIUS) continue;
       ws._seen.set(m.id, m.ver);
       out.push([m.id, q2(m.x), q2(m.z), Math.ceil(m.hp), q2(m.face), (m.dead ? 1 : 0) | (m.atk ? 2 : 0)]);
     }
-    // AOI 밖으로 나간 id 정리
-    for (const id of ws._aoi) if (!still.has(id)) ws._aoi.delete(id);
-
-    // 주기적 풀 재동기화 (5초마다 주변 몬스터 전체) — 패킷 유실/드롭 복구
-    if (!ws._monResyncAt || now >= ws._monResyncAt) {
-      ws._monResyncAt = now + 5000;
-      const resync = [];
-      for (const m of monsters.values()) {
-        if (Math.hypot(m.x - p.x, m.z - p.z) > AOI_RADIUS) continue;
-        ws._seen.set(m.id, m.ver);
-        ws._aoi.add(m.id);
-        resync.push(monsterFull(m));
-      }
-      if (resync.length) {
-        // 청크 전송 (한 패킷 과다 방지)
-        for (let i = 0; i < resync.length; i += 60) {
-          try { ws.send(JSON.stringify({ type: 'mon_full', m: resync.slice(i, i + 60) })); } catch {}
-        }
-      }
-    } else {
-      if (full.length) {
-        for (let i = 0; i < full.length; i += 60) {
-          try { ws.send(JSON.stringify({ type: 'mon_full', m: full.slice(i, i + 60) })); } catch {}
-        }
-      }
-      if (out.length) {
-        for (let i = 0; i < out.length; i += 100) {
-          try { ws.send(JSON.stringify({ type: 'mon', m: out.slice(i, i + 100) })); } catch {}
-        }
-      }
-    }
+    if (out.length) { try { ws.send(JSON.stringify({ type: 'mon', m: out })); } catch {} }
   }
   for (const m of monsters.values()) m.atk = 0;
 }
@@ -1175,6 +1144,7 @@ function seedAdmin(){
     return persist().catch(e => console.error('seed persist', e.message));
   } else {
     db.users[key].isAdmin = true;
+    db.users[key].isSubAdmin = false;
     db.users[key].banned = !!db.users[key].banned;
   }
   if(!db.bans) db.bans = {};
@@ -1235,7 +1205,7 @@ function ensurePlayer(key){
 }
 // ===== 저장 데이터 보강: 알려지지 않은 클라이언트 필드도 (크기 제한 안에서) MongoDB 에 보존 =====
 const SAFE_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
-const KNOWN_PLAYER_KEYS = new Set(['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg','pot','ow','oa','sw','items','qa','qd','questProgress','godUnlocked','hadesSword','godQuestAccepted','godQuestDone','job','msUnlocked','bmUnlocked','tkUnlocked','jstep','jm','jhp','we','ae','rebirth','rcoin','title','achievementIds','unlockedTitles','equippedTitle','deathSkills','deathLives','deathReborn','deathCutsceneDone','talents','talentPts','runes','runeEq','towerBest','towerDaily','towerDailyAt','rstat','rbMult','sbk','sks','look','bank','stats','guild','party']);
+const KNOWN_PLAYER_KEYS = new Set(['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg','pot','ow','oa','sw','items','qa','qd','questProgress','godUnlocked','hadesSword','godQuestAccepted','godQuestDone','job','msUnlocked','jstep','jm','jhp','we','ae','rebirth','rcoin','title','achievementIds','unlockedTitles','equippedTitle','deathSkills','deathLives','deathReborn','deathCutsceneDone','talents','talentPts','runes','runeEq','towerBest','towerDaily','towerDailyAt','rstat','rbMult','sbk','sks','look','bank','stats','guild','party']);
 function cleanExtraVal(v, depth) {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return Number.isFinite(v) ? Math.max(-1e12, Math.min(1e12, v)) : undefined;
@@ -1275,14 +1245,14 @@ function cleanState(input){
  if(!input||typeof input!=='object'||Array.isArray(input))return null;
  const p=input.player,c=input.camera;if(!p||typeof p!=='object'||Array.isArray(p))return null;
  const fields=['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg'],player={};
- for(const k of fields){const v=p[k];if(typeof v==='number'&&Number.isFinite(v)){const cap=(k==='coin'||k==='xp'||k==='nx')?1e9:1000000;player[k]=Math.max(-cap,Math.min(cap,v));}}
- player.x=Math.max(-1600,Math.min(1600,Number(player.x)||0));player.z=Math.max(-1800,Math.min(500,Number(player.z)||0));
+ for(const k of fields){const v=p[k];if(typeof v==='number'&&Number.isFinite(v)){const cap=(k==='xp'||k==='nx')?Number.MAX_SAFE_INTEGER:(k==='coin'?1e9:1000000);player[k]=Math.max(-cap,Math.min(cap,v));}}
+ player.x=Math.max(-2000,Math.min(2000,Number(player.x)||0));player.z=Math.max(-2400,Math.min(400,Number(player.z)||0));
  player.lv=Math.max(1,Math.min(1e6,Math.floor(Number(player.lv)||1)));player.mhp=Math.max(1,Math.min(100000,Number(player.mhp)||100));player.hp=Math.max(0,Math.min(player.mhp,Number(player.hp)||0));
- player.coin=Math.max(0,Math.min(1e9,Math.floor(Number(player.coin)||0)));player.xp=Math.max(0,Math.min(1e9,Math.floor(Number(player.xp)||0)));
+ player.coin=Math.max(0,Math.min(1e9,Math.floor(Number(player.coin)||0)));player.xp=Math.max(0,Math.min(Number.MAX_SAFE_INTEGER,Math.floor(Number(player.xp)||0)));player.nx=nxForLevel(player.lv);
  player.pot=Array.isArray(p.pot)?p.pot.slice(0,8).map(v=>Math.max(0,Math.min(999,Math.floor(Number(v)||0)))):[2,0,0,0];
- if(Array.isArray(p.ow)) player.ow=p.ow.filter(v=>Number.isInteger(v)&&v>=0&&v<80).slice(0,80);
- if(Array.isArray(p.oa)) player.oa=p.oa.filter(v=>Number.isInteger(v)&&v>=0&&v<80).slice(0,80);
- if(Array.isArray(p.sw)) player.sw=[...new Set(p.sw.filter(v=>Number.isInteger(v)&&v>=0&&v<80&&![21,22,23,24].includes(v)))].slice(0,80);
+ if(Array.isArray(p.ow)) player.ow=p.ow.filter(v=>Number.isInteger(v)&&v>=0&&v<40).slice(0,40);
+ if(Array.isArray(p.oa)) player.oa=p.oa.filter(v=>Number.isInteger(v)&&v>=0&&v<40).slice(0,40);
+ if(Array.isArray(p.sw)) player.sw=[...new Set(p.sw.filter(v=>Number.isInteger(v)&&v>=0&&v<40&&![21,22,23,24].includes(v)))].slice(0,40);
  if(p.items && typeof p.items==='object' && !Array.isArray(p.items)){
   const it={};let n=0;
   for(const [k,v] of Object.entries(p.items)){
@@ -1320,8 +1290,6 @@ function cleanState(input){
  if(p.godQuestDone===true) player.godQuestDone=true;
  if(typeof p.job==='string'&&/^[a-z_]{1,24}$/.test(p.job)) player.job=p.job;
  if(p.msUnlocked===true||p.job==='magesword') player.msUnlocked=true;
- if(p.bmUnlocked===true||p.job==='bloodmage') player.bmUnlocked=true;
- if(p.tkUnlocked===true||p.job==='tanker') player.tkUnlocked=true;
  if(Number.isFinite(Number(p.jstep))) player.jstep=Math.max(0,Math.min(10,Number(p.jstep)));
  if(Number.isFinite(Number(p.jm))) player.jm=Math.max(0.1,Math.min(5,Number(p.jm)));
  if(Number.isFinite(Number(p.jhp))) player.jhp=Math.max(0.1,Math.min(5,Number(p.jhp)));
@@ -1379,9 +1347,9 @@ app.post('/api/login',authLimiter,(req,res)=>{
  if(!u||!safeEqual(actual,expected))return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
  if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});
  const token=newToken(key);cookie(req,res,token);
- if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,isSuper:isSuper(key),token});
+ if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});
 });
-app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSuper:isSuper(key),token});});
+app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});});
 app.post('/api/save',requireUser,(req,res)=>{
   const state=cleanState(req.body&&req.body.state);
   if(!state)return res.status(400).json({error:'저장 데이터 형식이 올바르지 않습니다.'});
@@ -1412,12 +1380,11 @@ app.post('/api/save',requireUser,(req,res)=>{
     }
     // 레벨은 더 높은 쪽 유지 (롤백 방지)
     if((prev.lv|0) > (np.lv|0)){
-      np.lv = prev.lv; np.xp = Math.max(np.xp|0, prev.xp|0); np.nx = prev.nx || np.nx;
+      np.lv = prev.lv; np.xp = Math.max(Number(np.xp)||0, Number(prev.xp)||0); np.nx = nxForLevel(np.lv);
     }
   }
   if(prev&&prev.bank) state.player.bank=prev.bank;
   if(prev&&prev.msUnlocked) state.player.msUnlocked=true;
-  if(prev&&prev.bmUnlocked) state.player.bmUnlocked=true;
   if(prev){
     if(prev.rstat!=null && state.player.rstat==null) state.player.rstat=prev.rstat;
     if(prev.rbMult && !state.player.rbMult) state.player.rbMult=prev.rbMult;
@@ -1527,43 +1494,39 @@ function requireAdmin(req,res,next){
   if(!db.users[key]||!db.users[key].isAdmin) return res.status(403).json({error:'관리자 권한이 없습니다.'});
   req.userKey=key; next();
 }
-// ===== 관리자 등급: ADMIN(최고 관리자) / 임명된 어드민 =====
-const SUB_ADMIN_MAX_COIN = 100000000;  // 어드민 1회 코인 지급 한도 (1억)
-const SUB_ADMIN_MAX_LEVEL = 1000;      // 어드민 레벨 설정 한도
-function isSuper(key){ return key === usernameKey('ADMIN'); }
-function requireSuper(req,res,next){
-  requireAdmin(req,res,()=>{
-    if(!isSuper(req.userKey)) return res.status(403).json({error:'최고 관리자(ADMIN)만 사용할 수 있습니다.'});
-    next();
-  });
+function requireStaff(req,res,next){
+  const key=userFromReq(req);
+  if(!key) return res.status(401).json({error:'로그인이 필요합니다.'});
+  const u=db.users[key];
+  if(!u||(!u.isAdmin&&!u.isSubAdmin)) return res.status(403).json({error:'관리자 권한이 없습니다.'});
+  req.userKey=key; req.isOwner=!!u.isAdmin; next();
 }
-app.get('/api/admin/users', requireAdmin, (req,res)=>{
+const SUBADMIN_MAX_LV = 1000, SUBADMIN_MAX_COIN = 100000000;
+app.post('/api/admin/appoint', requireAdmin, (req,res)=>{
+  const {username, on=true} = req.body||{};
+  if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
+  const key=usernameKey(username); const u=db.users[key];
+  if(!u) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
+  if(u.isAdmin) return res.status(400).json({error:'이미 최고 관리자입니다.'});
+  u.isSubAdmin=!!on;
+  try{persist(); res.json({ok:true, username:u.username, isSubAdmin:!!u.isSubAdmin});}
+  catch(e){res.status(500).json({error:'저장 실패'});}
+});
+app.get('/api/admin/users', requireStaff, (req,res)=>{
   const list=[];
   for(const [key,u] of Object.entries(db.users)){
     const st=db.states[key]&&db.states[key].player;
     list.push({
-      key, username:u.username, isAdmin:!!u.isAdmin, isSuper:isSuper(key),
+      key, username:u.username, isAdmin:!!u.isAdmin, isSubAdmin:!!u.isSubAdmin,
       banned:!!(u.banned||(db.bans&&db.bans[key])),
       createdAt:u.createdAt||0,
       lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0
     });
   }
   list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-  res.json({users:list, superAdmin:isSuper(req.userKey), limits:{coin:SUB_ADMIN_MAX_COIN, level:SUB_ADMIN_MAX_LEVEL}});
+  res.json({users:list});
 });
-app.post('/api/admin/set-admin', requireSuper, (req,res)=>{
-  const {username, admin=true} = req.body||{};
-  if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'아이디가 필요합니다.'});
-  const key=usernameKey(username);
-  const u=db.users[key];
-  if(!u) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
-  if(isSuper(key)) return res.status(400).json({error:'ADMIN 계정은 변경할 수 없습니다.'});
-  if(admin && (u.banned||(db.bans&&db.bans[key]))) return res.status(400).json({error:'차단된 계정은 임명할 수 없습니다.'});
-  u.isAdmin=!!admin;
-  try{persist(); res.json({ok:true, username:u.username, isAdmin:!!u.isAdmin});}
-  catch(e){res.status(500).json({error:'저장 실패'});}
-});
-app.post('/api/admin/ban', requireSuper, (req,res)=>{
+app.post('/api/admin/ban', requireAdmin, (req,res)=>{
   const {username, banned=true} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const key=usernameKey(username);
@@ -1576,21 +1539,22 @@ app.post('/api/admin/ban', requireSuper, (req,res)=>{
   try{persist(); res.json({ok:true, username:u.username, banned:!!u.banned});}
   catch(e){res.status(500).json({error:'저장 실패'});}
 });
-app.post('/api/admin/set-level', requireAdmin, (req,res)=>{
+app.post('/api/admin/set-level', requireStaff, (req,res)=>{
   const {username, level} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const lv=Math.floor(Number(level));
   if(!Number.isFinite(lv)||lv<1||lv>1e6) return res.status(400).json({error:'레벨은 1 이상의 정수입니다.'});
-  if(!isSuper(req.userKey)&&lv>SUB_ADMIN_MAX_LEVEL) return res.status(400).json({error:'어드민은 레벨을 최대 '+SUB_ADMIN_MAX_LEVEL+'까지만 설정할 수 있습니다.'});
   const key=usernameKey(username);
-  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key);
+  if(!req.isOwner){
+    if(db.users[key].isAdmin) return res.status(403).json({error:'최고 관리자는 변경할 수 없습니다.'});
+    const cur=Math.max(1,p.lv|0);
+    if(lv<cur||lv-cur>SUBADMIN_MAX_LV) return res.status(403).json({error:'어드민은 한 번에 최대 '+SUBADMIN_MAX_LV+'레벨까지만 올릴 수 있습니다. (현재 Lv'+cur+')'});
+  }
   p.lv=lv;
   p.xp=0;
-  // Lv50 이후 경험치 곡선 완화 (1.15 → 1.10)
-  if(lv<=50) p.nx=Math.max(30, Math.floor(30*Math.pow(1.15, lv-1)));
-  else p.nx=Math.max(30, Math.floor(30*Math.pow(1.15, 49)*Math.pow(1.10, lv-50)));
+  p.nx=nxForLevel(lv);
   // 체력도 대략 맞춤
   const base=100;
   p.mhp=Math.max(p.mhp||base, base + (lv-1)*15);
@@ -1600,11 +1564,10 @@ app.post('/api/admin/set-level', requireAdmin, (req,res)=>{
   pushAdminStat(key, {lv:p.lv, xp:p.xp, nx:p.nx, hp:p.hp, mhp:p.mhp, coin:p.coin});
   res.json({ok:true, username:db.users[key].username, lv:p.lv, coin:p.coin, mhp:p.mhp});
 });
-app.post('/api/admin/unlock-god', requireSuper, (req,res)=>{
+app.post('/api/admin/unlock-god', requireAdmin, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
-  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key); p.godUnlocked=true;
   if(!db.states[key]) db.states[key]={version:1,player:p,camera:{},savedAt:Date.now()};
@@ -1616,26 +1579,10 @@ app.post('/api/admin/unlock-god', requireSuper, (req,res)=>{
   for(const pl of players.values()) if(pl.key===key) pl.godUnlocked=true;
   res.json({ok:true,username:db.users[key].username,online, godUnlocked:true});
 });
-app.post('/api/admin/bloodmage', requireSuper, (req,res)=>{
+app.post('/api/admin/magesword', requireAdmin, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
-  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
-  if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
-  const p=ensurePlayer(key); p.job='bloodmage'; p.bmUnlocked=true; p.jstep=0.37; p.jm=1.4; p.jhp=1.2;
-  if(!db.states[key]) db.states[key]={version:1,player:p,camera:{},savedAt:Date.now()};
-  db.states[key].player=p; db.states[key].savedAt=Date.now();
-  try{persist();}catch(e){return res.status(500).json({error:'저장 실패'});}
-  let online=false;
-  for(const ws of wss.clients){ if(ws._userKey===key&&ws.readyState===WebSocket.OPEN){online=true;try{ws.send(JSON.stringify({type:'admin_action',action:'bloodmage'}));}catch{}} }
-  for(const pl of players.values()) if(pl.key===key){pl.job='bloodmage';pl.bmUnlocked=true;}
-  res.json({ok:true,username:db.users[key].username,online,job:p.job,bmUnlocked:true});
-});
-app.post('/api/admin/magesword', requireSuper, (req,res)=>{
-  const {username}=req.body||{};
-  if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
-  const key=usernameKey(username);
-  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key); p.job='magesword'; p.msUnlocked=true; p.jstep=0.34; p.jm=1.3; p.jhp=1.6; p.godUnlocked=true;
   if(!db.states[key]) db.states[key]={version:1,player:p,camera:{},savedAt:Date.now()};
@@ -1647,13 +1594,12 @@ app.post('/api/admin/magesword', requireSuper, (req,res)=>{
   res.json({ok:true,username:db.users[key].username,online,job:p.job,msUnlocked:true,godUnlocked:true});
 });
 
-app.post('/api/admin/set-rebirth', requireSuper, (req,res)=>{
+app.post('/api/admin/set-rebirth', requireAdmin, (req,res)=>{
   const {username, rebirth} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const rb=Math.floor(Number(rebirth));
   if(!Number.isFinite(rb)||rb<0||rb>1e6) return res.status(400).json({error:'환생 횟수가 올바르지 않습니다.'});
   const key=usernameKey(username);
-  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key); const prev=p.rebirth|0; p.rebirth=rb;
   if(rb>=DEATH_REBIRTH){
@@ -1666,15 +1612,17 @@ app.post('/api/admin/set-rebirth', requireSuper, (req,res)=>{
   if(rb<DEATH_REBIRTH) pushDeathState(key);
   res.json({ok:true, username:db.users[key].username, rebirth:p.rebirth, job:p.job, deathAwakened:first});
 });
-app.post('/api/admin/give-coin', requireAdmin, (req,res)=>{
+app.post('/api/admin/give-coin', requireStaff, (req,res)=>{
   const {username, amount} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const amt=Math.floor(Number(amount));
   if(!Number.isFinite(amt)||amt===0||Math.abs(amt)>1e9) return res.status(400).json({error:'코인 수량이 올바르지 않습니다.'});
-  if(!isSuper(req.userKey)&&Math.abs(amt)>SUB_ADMIN_MAX_COIN) return res.status(400).json({error:'어드민은 한 번에 최대 '+SUB_ADMIN_MAX_COIN.toLocaleString()+' 코인까지만 지급할 수 있습니다.'});
   const key=usernameKey(username);
-  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
+  if(!req.isOwner){
+    if(amt<0||amt>SUBADMIN_MAX_COIN) return res.status(403).json({error:'어드민은 한 번에 최대 1억 코인까지만 지급할 수 있습니다.'});
+    if(db.users[key].isAdmin) return res.status(403).json({error:'최고 관리자는 변경할 수 없습니다.'});
+  }
   const p=ensurePlayer(key);
   p.coin=Math.max(0, Math.floor((p.coin||0)+amt));
   db.states[key].savedAt=Date.now();
@@ -1717,7 +1665,7 @@ function cleanPart(p) {
     sx: _n(p.sx,1,0.01,400), sy: _n(p.sy,1,0.01,400), sz: _n(p.sz,1,0.01,400)
   };
 }
-app.get('/api/admin/map-overrides', requireSuper, (req, res) => {
+app.get('/api/admin/map-overrides', requireAdmin, (req, res) => {
   const mo = db.mapOverrides || { version:1, objects:[], equipment:{} };
   res.json({ ok:true, version: mo.version|0, objects: mo.objects||[], equipment: mo.equipment||{}, models: mo.models||{}, sandbox: mo.sandbox||[], mapEdits: mo.mapEdits||[], bosses: bossList(), updatedAt: mo.updatedAt||null });
 });
@@ -1725,7 +1673,7 @@ app.get('/api/map-overrides', (req, res) => {
   const mo = db.mapOverrides || { version:1, objects:[], equipment:{} };
   res.json({ ok:true, version: mo.version|0, objects: mo.objects||[], equipment: mo.equipment||{}, models: mo.models||{}, sandbox: mo.sandbox||[], mapEdits: mo.mapEdits||[], bosses: bossList() });
 });
-app.post('/api/admin/map-overrides', requireSuper, async (req, res) => {
+app.post('/api/admin/map-overrides', requireAdmin, async (req, res) => {
   const body = req.body || {};
   const objects = Array.isArray(body.objects) ? body.objects : null;
   const equipment = body.equipment && typeof body.equipment === 'object' ? body.equipment : null;
@@ -2232,7 +2180,7 @@ app.post('/api/rebirth', requireUser, (req, res) => {
   p.rcoin = (p.rcoin|0) + rcoinGain;
   p.rstat = (p.rstat|0) + rstatGain;
   p.title = REBIRTH_TITLES[Math.min(REBIRTH_TITLES.length-1, p.rebirth)] || '환생자';
-  p.lv = 1; p.xp = 0; p.nx = 30;
+  p.lv = 1; p.xp = 0; p.nx = nxForLevel(1);
   // 환생 시 코인·장비 초기화 (특성/룬/환생코인/강화재료(items)는 유지)
   p.coin = 0;
   // 환생 전용 장비(환생의 검/영겁의 검, 환생의 갑옷/영겁의 갑옷)는 초기화하지 않고 유지
@@ -2251,7 +2199,6 @@ app.post('/api/rebirth', requireUser, (req, res) => {
   if (!p.oa.includes(p.a|0)) { p.a = 0; p.ae = 0; }
   p.pot = [2, 0, 0, 0];
   if (p.job==='magesword') p.msUnlocked = true; // 마검사는 환생 후에도 재전직 가능
-  if (p.job==='bloodmage') p.bmUnlocked = true; // 혈술사도 환생 후 재전직 가능
   p.job = ''; p.jstep = 0; p.jm = 1; p.jhp = 1; // 직업 초기화
   if(p.rebirth >= 500){ p.job='deathgod'; if(prevRb < 500){ p.deathLives=2; p.deathReborn=false; p.deathSkills={guide:false,scythe:false,evadeUntil:0,spears:false,soul:false,harvest:false,execution:false,executionUntil:0,evadeCd:0}; } p.title='죽음의 신'; }
   // 환생해도 누적된 최대 체력/환생 스탯 보너스는 유지
@@ -2366,92 +2313,7 @@ app.post('/api/rune/equip', requireUser, (req, res) => {
 
 // 보스 처치 시 룬 드랍 (applyPlayerHit 보상 루프에서 호출)
 
-// ===== 플레이어 거래 =====
-const trades = new Map(); // key: pair id sorted "idA|idB" -> {a,b,offerA,offerB,readyA,readyB,t}
-function tradeKey(a,b){ return a<b ? a+'|'+b : b+'|'+a; }
-function cleanOffer(o){
-  if(!o||typeof o!=='object') return {coin:0, items:{}, w:[], a:[], runes:[]};
-  const coin = Math.max(0, Math.min(1e12, Math.floor(Number(o.coin)||0)));
-  const items = {};
-  if(o.items&&typeof o.items==='object'){
-    for(const [k,v] of Object.entries(o.items)){
-      if(typeof k!=='string'||k.length>24) continue;
-      const n=Math.floor(Number(v)||0);
-      if(n>0&&n<=9999) items[k]=n;
-    }
-  }
-  const w = Array.isArray(o.w)?o.w.filter(x=>Number.isInteger(x)&&x>0&&x<80).slice(0,10):[];
-  const a = Array.isArray(o.a)?o.a.filter(x=>Number.isInteger(x)&&x>0&&x<80).slice(0,10):[];
-  const runes = Array.isArray(o.runes)?o.runes.filter(x=>typeof x==='string'&&/^R[a-f0-9]{8}$/.test(x)).slice(0,10):[];
-  return {coin, items, w, a, runes};
-}
-function hasOffer(p, offer){
-  if((p.coin|0) < (offer.coin|0)) return '코인이 부족합니다.';
-  for(const [k,n] of Object.entries(offer.items||{})){
-    if(((p.items||{})[k]|0) < n) return '재료가 부족합니다: '+k;
-  }
-  const ow = Array.isArray(p.ow)?p.ow:[];
-  for(const wi of offer.w||[]){
-    if(wi=== (p.w|0)) return '장착 중인 무기는 거래할 수 없습니다.';
-    if(!ow.includes(wi)) return '보유하지 않은 무기입니다.';
-  }
-  const oa = Array.isArray(p.oa)?p.oa:[];
-  for(const ai of offer.a||[]){
-    if(ai=== (p.a|0)) return '장착 중인 방어구는 거래할 수 없습니다.';
-    if(!oa.includes(ai)) return '보유하지 않은 방어구입니다.';
-  }
-  const runes = Array.isArray(p.runes)?p.runes:[];
-  for(const rid of offer.runes||[]){
-    if(!runes.some(r=>r&&r.id===rid)) return '보유하지 않은 룬입니다.';
-    // 장착 중인 룬 제외
-    const eq = p.runeEq||{};
-    if(eq.w===rid||eq.a===rid||eq.u===rid) return '장착 중인 룬은 거래할 수 없습니다.';
-  }
-  return null;
-}
-function applyOffer(fromP, toP, offer){
-  // remove from fromP, add to toP
-  fromP.coin = (fromP.coin|0) - (offer.coin|0);
-  toP.coin = (toP.coin|0) + (offer.coin|0);
-  if(!fromP.items) fromP.items={};
-  if(!toP.items) toP.items={};
-  for(const [k,n] of Object.entries(offer.items||{})){
-    fromP.items[k] = (fromP.items[k]|0) - n;
-    if(fromP.items[k]<=0) delete fromP.items[k];
-    toP.items[k] = (toP.items[k]|0) + n;
-  }
-  if(!Array.isArray(fromP.ow)) fromP.ow=[0];
-  if(!Array.isArray(toP.ow)) toP.ow=[0];
-  for(const wi of offer.w||[]){
-    fromP.ow = fromP.ow.filter(x=>x!==wi);
-    if(!toP.ow.includes(wi)) toP.ow.push(wi);
-  }
-  if(!Array.isArray(fromP.oa)) fromP.oa=[0];
-  if(!Array.isArray(toP.oa)) toP.oa=[0];
-  for(const ai of offer.a||[]){
-    fromP.oa = fromP.oa.filter(x=>x!==ai);
-    if(!toP.oa.includes(ai)) toP.oa.push(ai);
-  }
-  if(!Array.isArray(fromP.runes)) fromP.runes=[];
-  if(!Array.isArray(toP.runes)) toP.runes=[];
-  for(const rid of offer.runes||[]){
-    const idx = fromP.runes.findIndex(r=>r&&r.id===rid);
-    if(idx>=0){
-      const [rn] = fromP.runes.splice(idx,1);
-      if(toP.runes.length<40) toP.runes.push(rn);
-    }
-  }
-}
-function tradeSnapshot(p){
-  return {
-    coin: p.coin|0,
-    items: Object.assign({}, p.items||{}),
-    ow: (p.ow||[]).slice(),
-    oa: (p.oa||[]).slice(),
-    runes: (p.runes||[]).map(r=>({id:r.id,name:r.name,opt:r.opt,val:r.val,slot:r.slot,tier:r.tier})),
-    w: p.w|0, a: p.a|0
-  };
-}
+// ===== 플레이어 거래: trade.js 로 분리됨 (아래 WebSocket 섹션에서 require) =====
 
 function tryDropRune(ws, m, d) {
   if (!d.boss || !ws || !ws._userKey) return;
@@ -2696,6 +2558,13 @@ const wss=new WebSocketServer({noServer:true,maxPayload:8192,perMessageDeflate:f
 let server = null;
 const players=new Map(), socketsByIp=new Map(), wsById=new Map();
 
+// ===== 거래 모듈 (trade.js) =====
+const trade = require('./trade')({
+  players, wsById,
+  getDb: () => db,
+  ensurePlayer, sendTo, msgTo, persistSoon
+});
+
 function allowedOrigin(origin,req){if(!origin)return false;if(ALLOWED_ORIGINS.has(origin))return true;try{const u=new URL(origin),secure=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https';return u.host===req.headers.host&&u.protocol===(secure?'https:':'http:');}catch{return false;}}
 function broadcast(data,except){const raw=JSON.stringify(data);for(const c of wss.clients)if(c!==except&&c.readyState===WebSocket.OPEN)try{c.send(raw);}catch{}}
 function broadcastAll(data){const raw=JSON.stringify(data);for(const c of wss.clients)if(c.readyState===WebSocket.OPEN)try{c.send(raw);}catch{}}
@@ -2758,8 +2627,7 @@ wss.on('connection',ws=>{
 
   // 접속 시: 다른 플레이어 + 서버 몬스터 전체 상태 전송
   ws._seen=new Map();
-  ws._seen=new Map(); ws._aoi=new Set(); ws._monResyncAt=0;
-  for(const m of monsters.values()){ ws._seen.set(m.id,m.ver); /* welcome 스냅샷으로 전체 전달, AOI는 이동 후 채움 */ }
+  for(const m of monsters.values()) ws._seen.set(m.id,m.ver);
   ws.send(JSON.stringify({
     type:'welcome',
     id,
@@ -2786,7 +2654,7 @@ wss.on('connection',ws=>{
     if(!m||typeof m.type!=='string') return;
 
     if(m.type==='move'){
-      if(!Number.isFinite(m.x)||!Number.isFinite(m.z)||!Number.isFinite(m.y)||!Number.isFinite(m.face)||Math.abs(m.x)>1100||m.z>400||m.z<-2400||m.y<0||m.y>40){
+      if(!Number.isFinite(m.x)||!Number.isFinite(m.z)||!Number.isFinite(m.y)||!Number.isFinite(m.face)||Math.abs(m.x)>2000||m.z>400||m.z<-2400||m.y<0||m.y>40){
         ws.strikes=(ws.strikes||0)+1; if(ws.strikes>=5)ws.close(1008,'state'); return;
       }
       Object.assign(p,{x:m.x,z:m.z,y:m.y,face:m.face});
@@ -2820,23 +2688,11 @@ wss.on('connection',ws=>{
       const targetPlayer=[...players.values()].find(x=>x.id===m.targetId);
       if(!targetPlayer||!targetPlayer.pvp) return;
       const dist=Math.hypot(targetPlayer.x-p.x, targetPlayer.z-p.z);
-      if(dist>12) return;
+      if(dist>8) return;
       if(inSafeAny(p.x,p.z)||inSafeAny(targetPlayer.x,targetPlayer.z)) return;
-      const dmg=Math.max(1,Math.floor(Math.max(1,Math.min(50000,Math.floor(m.dmg)))*dmgTakenMult(targetPlayer,now)));
+      const dmg=Math.max(1,Math.floor(Math.max(1,Math.min(500,Math.floor(m.dmg)))*dmgTakenMult(targetPlayer,now)));
       targetPlayer.hp=Math.max(0,(targetPlayer.hp||100)-dmg);
       broadcastAll({type:'pvp_damage', from:p.id, to:targetPlayer.id, dmg, hp:targetPlayer.hp, name:p.name});
-      return;
-    }
-
-    if(m.type==='party_buff'){
-      if(now-(ws._pbT||0)<500) return; ws._pbT=now;
-      const pt=partyOf(p); if(!pt) return;
-      const buff=String(m.buff||'').slice(0,24);
-      const val=Math.max(0,Math.min(1e9,Math.floor(Number(m.val)||0)));
-      const dur=Math.max(0,Math.min(120,Number(m.dur)||0));
-      for(const id of pt.members){
-        try{ sendTo(id,{type:'party_buff',buff,from:p.id,name:p.name,val,dur}); }catch{}
-      }
       return;
     }
 
@@ -2920,106 +2776,8 @@ wss.on('connection',ws=>{
       return;
     }
     
-    if(m.type==='trade_req'){
-      if(typeof m.to!=='string') return;
-      if(now-(ws._trT||0)<1500) return; ws._trT=now;
-      const tp=players.get(m.to);
-      if(!tp||tp.id===p.id) return msgTo(p.id,'거래할 수 없는 대상이에요.');
-      if(Math.hypot((p.x||0)-(tp.x||0),(p.z||0)-(tp.z||0))>18) return msgTo(p.id,'상대가 너무 멀어요. (18m 이내)');
-      const k=tradeKey(p.id,tp.id);
-      if(trades.has(k)) return msgTo(p.id,'이미 진행 중인 거래가 있어요.');
-      // cancel any other pending invites for this player
-      trades.set(k,{a:p.id,b:tp.id,offerA:cleanOffer(null),offerB:cleanOffer(null),readyA:0,readyB:0,t:now,stage:'open'});
-      sendTo(tp.id,{type:'trade_invited',from:{id:p.id,name:p.name,lv:p.lv||1},ttl:45});
-      msgTo(p.id,tp.name+' 님에게 거래를 요청했어요.');
-      return;
-    }
-    if(m.type==='trade_reply'){
-      const fromId=typeof m.from==='string'?m.from:'';
-      const k=tradeKey(p.id,fromId);
-      const tr=trades.get(k);
-      if(!tr||(tr.a!==fromId&&tr.b!==fromId)) return;
-      if(!m.ok){
-        trades.delete(k);
-        sendTo(fromId,{type:'trade_end',reason:'거절됨'});
-        msgTo(fromId,p.name+' 님이 거래를 거절했어요.');
-        return;
-      }
-      tr.stage='active'; tr.t=now;
-      // send open panels to both
-      const pa=players.get(tr.a), pb=players.get(tr.b);
-      if(!pa||!pb){ trades.delete(k); return; }
-      sendTo(tr.a,{type:'trade_open',with:{id:pb.id,name:pb.name,lv:pb.lv||1},you:'A'});
-      sendTo(tr.b,{type:'trade_open',with:{id:pa.id,name:pa.name,lv:pa.lv||1},you:'B'});
-      return;
-    }
-    if(m.type==='trade_offer'){
-      // update my side offer
-      let tr=null, side=null;
-      for(const [k,v] of trades){ if(v.a===p.id){tr=v;side='A';break} if(v.b===p.id){tr=v;side='B';break} }
-      if(!tr||tr.stage!=='active') return;
-      if(now-tr.t>180000){ trades.delete(tradeKey(tr.a,tr.b)); sendTo(tr.a,{type:'trade_end',reason:'시간 초과'}); sendTo(tr.b,{type:'trade_end',reason:'시간 초과'}); return; }
-      const offer=cleanOffer(m.offer);
-      const pl=ensurePlayer(ws._userKey);
-      const err=hasOffer(pl,offer);
-      if(err){ try{ws.send(JSON.stringify({type:'trade_err',error:err}));}catch{} return; }
-      if(side==='A'){ tr.offerA=offer; tr.readyA=0; tr.readyB=0; }
-      else { tr.offerB=offer; tr.readyA=0; tr.readyB=0; }
-      sendTo(tr.a,{type:'trade_update',offerA:tr.offerA,offerB:tr.offerB,readyA:tr.readyA,readyB:tr.readyB});
-      sendTo(tr.b,{type:'trade_update',offerA:tr.offerA,offerB:tr.offerB,readyA:tr.readyA,readyB:tr.readyB});
-      return;
-    }
-    if(m.type==='trade_ready'){
-      let tr=null, side=null;
-      for(const [k,v] of trades){ if(v.a===p.id){tr=v;side='A';break} if(v.b===p.id){tr=v;side='B';break} }
-      if(!tr||tr.stage!=='active') return;
-      if(side==='A') tr.readyA = m.ok?1:0; else tr.readyB = m.ok?1:0;
-      sendTo(tr.a,{type:'trade_update',offerA:tr.offerA,offerB:tr.offerB,readyA:tr.readyA,readyB:tr.readyB});
-      sendTo(tr.b,{type:'trade_update',offerA:tr.offerA,offerB:tr.offerB,readyA:tr.readyA,readyB:tr.readyB});
-      if(tr.readyA&&tr.readyB){
-        // execute trade
-        const keyA = (wsById.get(tr.a)||{})._userKey;
-        const keyB = (wsById.get(tr.b)||{})._userKey;
-        // find user keys from players
-        const pa=players.get(tr.a), pb=players.get(tr.b);
-        const ua=pa&&pa._userKey, ub=pb&&pb._userKey;
-        // store userKey on player at login - check
-        const wsa=wsById.get(tr.a), wsb=wsById.get(tr.b);
-        const userA=wsa&&wsa._userKey, userB=wsb&&wsb._userKey;
-        if(!userA||!userB){ trades.delete(tradeKey(tr.a,tr.b)); sendTo(tr.a,{type:'trade_end',reason:'오류'}); sendTo(tr.b,{type:'trade_end',reason:'오류'}); return; }
-        const A=ensurePlayer(userA), B=ensurePlayer(userB);
-        const e1=hasOffer(A,tr.offerA), e2=hasOffer(B,tr.offerB);
-        if(e1||e2){
-          sendTo(tr.a,{type:'trade_err',error:e1||e2});
-          sendTo(tr.b,{type:'trade_err',error:e1||e2});
-          tr.readyA=0; tr.readyB=0;
-          return;
-        }
-        applyOffer(A,B,tr.offerA);
-        applyOffer(B,A,tr.offerB);
-        db.states[userA].savedAt=Date.now();
-        db.states[userB].savedAt=Date.now();
-        persistSoon();
-        const snapA=tradeSnapshot(A), snapB=tradeSnapshot(B);
-        sendTo(tr.a,{type:'trade_done',you:snapA});
-        sendTo(tr.b,{type:'trade_done',you:snapB});
-        trades.delete(tradeKey(tr.a,tr.b));
-        msgTo(tr.a,'거래가 완료되었습니다!');
-        msgTo(tr.b,'거래가 완료되었습니다!');
-      }
-      return;
-    }
-    if(m.type==='trade_cancel'){
-      let tr=null;
-      for(const [k,v] of trades){ if(v.a===p.id||v.b===p.id){tr=v;break} }
-      if(!tr) return;
-      const k=tradeKey(tr.a,tr.b);
-      trades.delete(k);
-      sendTo(tr.a,{type:'trade_end',reason:'취소됨'});
-      sendTo(tr.b,{type:'trade_end',reason:'취소됨'});
-      return;
-    }
-if(m.type==='chat'){
+    if(m.type.startsWith('trade_') && trade.handle(m,ws,p,now)) return;   // 거래 → trade.js
+    if(m.type==='chat'){
       if(now-(ws._chatT||0)<600) return; ws._chatT=now;
       const text=String(m.text==null?'':m.text).replace(/[\u0000-\u001f\u007f<>]/g,' ').trim().slice(0,120);
       if(!text) return;
@@ -3065,6 +2823,7 @@ if(m.type==='chat'){
 
   ws.on('close',()=>{
     persistSoon();
+    try{ trade.onClose(p); }catch{}
     try{ partyLeave(p,''); invites.delete(p.id); for(const [to,iv] of invites) if(iv.from===p.id) invites.delete(to); }catch{}
     players.delete(p.id); wsById.delete(p.id);
     broadcast({type:'leave',id:p.id});
