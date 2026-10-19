@@ -20,7 +20,7 @@ try { fs.mkdirSync(DATA_DIR, {recursive:true}); } catch {}
 
 // ===== MongoDB 저장소 (MongoClient) =====
 const { MongoClient } = require('mongodb');
-const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://kingsmobile2026_db_user:a20140205g@cluster0.ux498h7.mongodb.net/';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://a01074202262_db_user:qAuTLKnGYOe3omLh@cluster0.kyqbii7.mongodb.net/';
 const MONGO_DB_NAME = process.env.MONGO_DB || 'blockrpg';
 const MONGO_DOC_ID = 'main';
 const mongoClient = new MongoClient(MONGO_URI, {
@@ -1321,9 +1321,9 @@ app.post('/api/login',authLimiter,(req,res)=>{
  if(!u||!safeEqual(actual,expected))return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
  if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});
  const token=newToken(key);cookie(req,res,token);
- if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,token});
+ if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,isSuper:isSuper(key),token});
 });
-app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,token});});
+app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSuper:isSuper(key),token});});
 app.post('/api/save',requireUser,(req,res)=>{
   const state=cleanState(req.body&&req.body.state);
   if(!state)return res.status(400).json({error:'저장 데이터 형식이 올바르지 않습니다.'});
@@ -1469,21 +1469,43 @@ function requireAdmin(req,res,next){
   if(!db.users[key]||!db.users[key].isAdmin) return res.status(403).json({error:'관리자 권한이 없습니다.'});
   req.userKey=key; next();
 }
+// ===== 관리자 등급: ADMIN(최고 관리자) / 임명된 어드민 =====
+const SUB_ADMIN_MAX_COIN = 10000000;   // 어드민 1회 코인 지급 한도 (1000만)
+const SUB_ADMIN_MAX_LEVEL = 1000;      // 어드민 레벨 설정 한도
+function isSuper(key){ return key === usernameKey('ADMIN'); }
+function requireSuper(req,res,next){
+  requireAdmin(req,res,()=>{
+    if(!isSuper(req.userKey)) return res.status(403).json({error:'최고 관리자(ADMIN)만 사용할 수 있습니다.'});
+    next();
+  });
+}
 app.get('/api/admin/users', requireAdmin, (req,res)=>{
   const list=[];
   for(const [key,u] of Object.entries(db.users)){
     const st=db.states[key]&&db.states[key].player;
     list.push({
-      key, username:u.username, isAdmin:!!u.isAdmin,
+      key, username:u.username, isAdmin:!!u.isAdmin, isSuper:isSuper(key),
       banned:!!(u.banned||(db.bans&&db.bans[key])),
       createdAt:u.createdAt||0,
       lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0
     });
   }
   list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-  res.json({users:list});
+  res.json({users:list, superAdmin:isSuper(req.userKey), limits:{coin:SUB_ADMIN_MAX_COIN, level:SUB_ADMIN_MAX_LEVEL}});
 });
-app.post('/api/admin/ban', requireAdmin, (req,res)=>{
+app.post('/api/admin/set-admin', requireSuper, (req,res)=>{
+  const {username, admin=true} = req.body||{};
+  if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'아이디가 필요합니다.'});
+  const key=usernameKey(username);
+  const u=db.users[key];
+  if(!u) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
+  if(isSuper(key)) return res.status(400).json({error:'ADMIN 계정은 변경할 수 없습니다.'});
+  if(admin && (u.banned||(db.bans&&db.bans[key]))) return res.status(400).json({error:'차단된 계정은 임명할 수 없습니다.'});
+  u.isAdmin=!!admin;
+  try{persist(); res.json({ok:true, username:u.username, isAdmin:!!u.isAdmin});}
+  catch(e){res.status(500).json({error:'저장 실패'});}
+});
+app.post('/api/admin/ban', requireSuper, (req,res)=>{
   const {username, banned=true} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const key=usernameKey(username);
@@ -1501,7 +1523,9 @@ app.post('/api/admin/set-level', requireAdmin, (req,res)=>{
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const lv=Math.floor(Number(level));
   if(!Number.isFinite(lv)||lv<1||lv>1e6) return res.status(400).json({error:'레벨은 1 이상의 정수입니다.'});
+  if(!isSuper(req.userKey)&&lv>SUB_ADMIN_MAX_LEVEL) return res.status(400).json({error:'어드민은 레벨을 최대 '+SUB_ADMIN_MAX_LEVEL+'까지만 설정할 수 있습니다.'});
   const key=usernameKey(username);
+  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key);
   p.lv=lv;
@@ -1522,6 +1546,7 @@ app.post('/api/admin/unlock-god', requireAdmin, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
+  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key); p.godUnlocked=true;
   if(!db.states[key]) db.states[key]={version:1,player:p,camera:{},savedAt:Date.now()};
@@ -1537,6 +1562,7 @@ app.post('/api/admin/bloodmage', requireAdmin, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
+  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key); p.job='bloodmage'; p.bmUnlocked=true; p.jstep=0.37; p.jm=1.4; p.jhp=1.2;
   if(!db.states[key]) db.states[key]={version:1,player:p,camera:{},savedAt:Date.now()};
@@ -1551,6 +1577,7 @@ app.post('/api/admin/magesword', requireAdmin, (req,res)=>{
   const {username}=req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'닉네임이 필요합니다.'});
   const key=usernameKey(username);
+  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key); p.job='magesword'; p.msUnlocked=true; p.jstep=0.34; p.jm=1.3; p.jhp=1.6; p.godUnlocked=true;
   if(!db.states[key]) db.states[key]={version:1,player:p,camera:{},savedAt:Date.now()};
@@ -1568,6 +1595,7 @@ app.post('/api/admin/set-rebirth', requireAdmin, (req,res)=>{
   const rb=Math.floor(Number(rebirth));
   if(!Number.isFinite(rb)||rb<0||rb>1e6) return res.status(400).json({error:'환생 횟수가 올바르지 않습니다.'});
   const key=usernameKey(username);
+  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key); const prev=p.rebirth|0; p.rebirth=rb;
   if(rb>=DEATH_REBIRTH){
@@ -1585,7 +1613,9 @@ app.post('/api/admin/give-coin', requireAdmin, (req,res)=>{
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const amt=Math.floor(Number(amount));
   if(!Number.isFinite(amt)||amt===0||Math.abs(amt)>1e9) return res.status(400).json({error:'코인 수량이 올바르지 않습니다.'});
+  if(!isSuper(req.userKey)&&Math.abs(amt)>SUB_ADMIN_MAX_COIN) return res.status(400).json({error:'어드민은 한 번에 최대 '+SUB_ADMIN_MAX_COIN.toLocaleString()+' 코인까지만 지급할 수 있습니다.'});
   const key=usernameKey(username);
+  if(!isSuper(req.userKey)&&isSuper(key)) return res.status(403).json({error:'최고 관리자 계정은 변경할 수 없습니다.'});
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key);
   p.coin=Math.max(0, Math.floor((p.coin||0)+amt));
@@ -1629,7 +1659,7 @@ function cleanPart(p) {
     sx: _n(p.sx,1,0.01,400), sy: _n(p.sy,1,0.01,400), sz: _n(p.sz,1,0.01,400)
   };
 }
-app.get('/api/admin/map-overrides', requireAdmin, (req, res) => {
+app.get('/api/admin/map-overrides', requireSuper, (req, res) => {
   const mo = db.mapOverrides || { version:1, objects:[], equipment:{} };
   res.json({ ok:true, version: mo.version|0, objects: mo.objects||[], equipment: mo.equipment||{}, models: mo.models||{}, sandbox: mo.sandbox||[], mapEdits: mo.mapEdits||[], bosses: bossList(), updatedAt: mo.updatedAt||null });
 });
@@ -1637,7 +1667,7 @@ app.get('/api/map-overrides', (req, res) => {
   const mo = db.mapOverrides || { version:1, objects:[], equipment:{} };
   res.json({ ok:true, version: mo.version|0, objects: mo.objects||[], equipment: mo.equipment||{}, models: mo.models||{}, sandbox: mo.sandbox||[], mapEdits: mo.mapEdits||[], bosses: bossList() });
 });
-app.post('/api/admin/map-overrides', requireAdmin, async (req, res) => {
+app.post('/api/admin/map-overrides', requireSuper, async (req, res) => {
   const body = req.body || {};
   const objects = Array.isArray(body.objects) ? body.objects : null;
   const equipment = body.equipment && typeof body.equipment === 'object' ? body.equipment : null;
