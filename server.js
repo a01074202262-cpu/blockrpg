@@ -606,6 +606,18 @@ function killMonster(m, d, p) {
           if (d.boss) tryDropRune(w, m, d);
         }
         try { w.send(JSON.stringify({ type: 'kill', id: m.id, mt: m.type, coin: rewardCoin, xp: rewardXp })); } catch {}
+        if (m.type === 'zeus' && w._userKey) {
+          try {
+            const pl = ensurePlayer(w._userKey);
+            if (pl.godQuestAccepted && !pl.godQuestDone) {
+              pl.godQuestDone = true; pl.hadesSword = true;
+              if (w.player) w.player.hadesSword = true;
+              if (db.states[w._userKey]) db.states[w._userKey].savedAt = Date.now();
+              persistSoon();
+              w.send(JSON.stringify({ type: 'hades_reward' }));
+            }
+          } catch (_) {}
+        }
         if (m.type === 'heavenlord' && !w.player.godUnlocked) {
           if (Math.random() < 0.10) { w.player.godUnlocked=true; try { w.send(JSON.stringify({type:'god_portal_unlock'})); } catch {} }
           else { try { w.send(JSON.stringify({type:'god_portal_fail'})); } catch {} }
@@ -1141,7 +1153,7 @@ function tickMonsters(dt, now) {
 function broadcastMonsters() {
   for (const ws of wss.clients) {
     const p = ws.player;
-    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen || ws.bufferedAmount > 1e6) continue;
+    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen || ws.bufferedAmount > 4e6) continue;
     const out = [];
     for (const m of monsters.values()) {
       if (ws._seen.get(m.id) === m.ver) continue;
@@ -1216,6 +1228,7 @@ function unsign(token){if(typeof token!=='string')return null;const [body,sig]=t
 function isHttps(req){return String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https'||!!(req.socket&&req.socket.encrypted);}
 function cookie(req,res,token){res.setHeader('Set-Cookie',`rpg_session=${token}; Path=/; HttpOnly; ${isHttps(req)?'Secure; ':''}SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS/1000)}`);}
 function newToken(key){return sign({u:key,exp:Date.now()+SESSION_TTL_MS});}
+function startSession(key){return newToken(key);}   // 같은 계정으로 여러 기기 동시 접속 허용
 function clearCookie(req,res){res.setHeader('Set-Cookie',`rpg_session=; Path=/; HttpOnly; ${isHttps(req)?'Secure; ':''}SameSite=Lax; Max-Age=0`);}
 function userFromToken(t){const p=unsign(t);return p&&db.users[p.u]?p.u:null;}
 function userFromReq(req){
@@ -1348,6 +1361,10 @@ function keepServerAuth(prev, np) {
   if (prev.deathSkills && typeof prev.deathSkills === 'object') np.deathSkills = Object.assign({}, prev.deathSkills);
   if (prev.deathLives != null) np.deathLives = prev.deathLives;
   if (prev.deathReborn) np.deathReborn = true;
+  if (prev.godUnlocked === true) np.godUnlocked = true;
+  if (prev.hadesSword === true) np.hadesSword = true;
+  if (prev.godQuestAccepted === true) np.godQuestAccepted = true;
+  if (prev.godQuestDone === true) np.godQuestDone = true;
   if (prev.deathCutsceneDone) np.deathCutsceneDone = true;
   if (!np.title && prev.title) np.title = prev.title;
   if ((np.rebirth | 0) >= DEATH_REBIRTH) np.job = 'deathgod';
@@ -1439,6 +1456,7 @@ function cleanState(input){
  return {version:1,player,camera,savedAt:Date.now()};
 }
 app.post('/api/register',authLimiter,(req,res)=>{
+ if(maintenanceOn())return res.status(503).json({error:MAINT_MSG});
  const {username,password}=req.body||{};
  if(!validUsername(username))return res.status(400).json({error:'아이디는 한글/영문/숫자/._- 조합으로 3~24자 입력하세요.'});
  if(!validPassword(password))return res.status(400).json({error:'비밀번호는 8~128자로 입력하세요.'});
@@ -1447,7 +1465,7 @@ app.post('/api/register',authLimiter,(req,res)=>{
  const salt=crypto.randomBytes(16).toString('hex');
  db.users[key]={username,passwordHash:hashPassword(password,salt),salt,createdAt:Date.now()};
  db.states[key]=null;persist();
- const token=newToken(key);cookie(req,res,token);
+ const token=startSession(key);cookie(req,res,token);
  res.status(201).json({user:username,state:null,token});
 });
 app.post('/api/login',authLimiter,async(req,res)=>{
@@ -1465,7 +1483,8 @@ app.post('/api/login',authLimiter,async(req,res)=>{
     return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
   }
   if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});
-  const token=newToken(key);cookie(req,res,token);
+  if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:MAINT_MSG});
+  const token=startSession(key);cookie(req,res,token);
   if(db.states[key]&&db.states[key].player)ensurePlayer(key);
   sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});
  }catch(e){
@@ -1473,7 +1492,7 @@ app.post('/api/login',authLimiter,async(req,res)=>{
   res.status(500).json({error:'로그인 처리 중 오류가 발생했습니다.'});
  }
 });
-app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});});
+app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:MAINT_MSG});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});});
 app.post('/api/save',requireUser,(req,res)=>{
   const state=cleanState(req.body&&req.body.state);
   if(!state)return res.status(400).json({error:'저장 데이터 형식이 올바르지 않습니다.'});
@@ -1634,6 +1653,17 @@ function pushAdminStat(key, patch){
     }
   }catch(e){}
 }
+// 점검 모드: 최고 관리자만 접속 가능 (db.mapOverrides.maintenance 에 저장 → 재시작 후에도 유지)
+let restarting = false;
+const MAINT_MSG = '서버 재시작 중입니다. 잠시 후 다시 접속해 주세요.';
+function maintenanceOn(){ return restarting || !!(db.mapOverrides && db.mapOverrides.maintenance); }
+function kickNonOwners(msg){
+  for(const ws of wss.clients){
+    if(isOwnerKey(ws._userKey)) continue;
+    try{ if(ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'server_restart',msg:msg||MAINT_MSG})); }catch{}
+    setTimeout(()=>{ try{ws.close(1012,'maintenance');}catch{} },1200);
+  }
+}
 function requireAdmin(req,res,next){
   const key=userFromReq(req);
   if(!key) return res.status(401).json({error:'로그인이 필요합니다.'});
@@ -1654,6 +1684,33 @@ function requireStaff(req,res,next){
   req.userKey=key; req.isOwner=!!(u.isAdmin && isOwnerKey(key)); next();
 }
 const SUBADMIN_MAX_LV = 1000, SUBADMIN_MAX_COIN = 100000000;
+app.post('/api/admin/restart', requireAdmin, async (req,res)=>{
+  if(restarting) return res.status(409).json({error:'이미 재시작 중입니다.'});
+  const delay=Math.max(0,Math.min(300,Math.floor(Number(req.body&&req.body.delaySec)||10)));
+  const ownerOnly=!!(req.body&&req.body.ownerOnly);   // 재시작 후에도 최고 관리자만 접속(점검 모드 유지)
+  restarting=true;
+  if(!db.mapOverrides) db.mapOverrides={version:1,objects:[],equipment:{}};
+  db.mapOverrides.maintenance=ownerOnly;
+  res.json({ok:true,delaySec:delay,ownerOnly});
+  try{ broadcastAll({type:'announce',text:'⚠ '+(delay>0?delay+'초 뒤 ':'')+'서버가 재시작됩니다. 잠시 후 다시 접속해 주세요.'}); }catch{}
+  setTimeout(async()=>{
+    try{ kickNonOwners(MAINT_MSG); }catch{}
+    try{ await persist(); }catch(e){ console.error('restart persist',e.message); }
+    setTimeout(()=>{
+      try{ for(const ws of wss.clients){ try{ws.close(1012,'restart');}catch{} } }catch{}
+      disconnectFromMongoDB().finally(()=>process.exit(0));   // Render 등이 자동으로 다시 기동
+    },2000);
+  },delay*1000);
+});
+app.post('/api/admin/maintenance', requireAdmin, async (req,res)=>{
+  const on=!!(req.body&&req.body.on);
+  if(!db.mapOverrides) db.mapOverrides={version:1,objects:[],equipment:{}};
+  db.mapOverrides.maintenance=on;
+  try{ await persist(); }catch{}
+  if(on) kickNonOwners(MAINT_MSG);
+  res.json({ok:true,maintenance:on});
+});
+app.get('/api/admin/maintenance', requireAdmin, (req,res)=>res.json({maintenance:maintenanceOn(),restarting}));
 app.post('/api/admin/appoint', requireAdmin, (req,res)=>{
   const {username, on} = req.body||{};
   if(typeof username!=='string'||!username.trim()) return res.status(400).json({error:'아이디가 필요합니다.'});
@@ -2118,11 +2175,11 @@ app.post('/api/guild/leave', requireUser, (req, res) => {
   removeMember(g, req.userKey, '길드를 떠났습니다.'); res.json({ ok: true });
 });
 app.post('/api/guild/kick', requireUser, (req, res) => {
-  const g = myGuildMng(req, res, false); if (!g) return;
+  const g = myGuildMng(req, res, true); if (!g) return;   // 길드장 전용
   const tk = targetKey(req), t = g.members[tk]; if (!t) return jerr(res, '길드원이 아니에요.');
   if (tk === req.userKey) return jerr(res, '자기 자신은 추방할 수 없어요.');
   const myRole = g.members[req.userKey].role;
-  if (t.role === 'leader' || (t.role === 'officer' && myRole !== 'leader')) return jerr(res, '권한이 부족해요.', 403);
+  if (t.role === 'leader' || myRole !== 'leader') return jerr(res, '길드장만 추방할 수 있어요.', 403);
   removeMember(g, tk, '길드에서 추방되었습니다.'); res.json({ ok: true });
 });
 app.post('/api/guild/role', requireUser, (req, res) => {
@@ -2759,6 +2816,19 @@ const trade = require('./trade')({
 
 function allowedOrigin(origin,req){if(!origin)return false;if(ALLOWED_ORIGINS.has(origin))return true;try{const u=new URL(origin),secure=String(req.headers['x-forwarded-proto']||'').split(',')[0].trim()==='https';return u.host===req.headers.host&&u.protocol===(secure?'https:':'http:');}catch{return false;}}
 function broadcast(data,except){const raw=JSON.stringify(data);for(const c of wss.clients)if(c!==except&&c.readyState===WebSocket.OPEN)try{c.send(raw);}catch{}}
+// 플레이어 상태: 근처(STATE_NEAR)는 매번, 먼 사람은 1초에 한 번만. 전송 버퍼가 밀린 소켓은 건너뜀
+// (전원에게 매번 보내면 N×N 폭증 → 몬스터 갱신(mon)이 밀려 몬스터가 안 보이거나 체력이 안 닳는 문제 발생)
+const STATE_NEAR = 320;
+function broadcastState(p,except,now){
+  const raw=JSON.stringify({type:'state',player:p});
+  for(const c of wss.clients){
+    if(c===except||c.readyState!==WebSocket.OPEN||!c.player) continue;
+    if(c.bufferedAmount>131072) continue;
+    const far=Math.hypot(c.player.x-p.x,c.player.z-p.z)>STATE_NEAR;
+    if(far){ if(now-(c._farT&&c._farT[p.id]||0)<1000) continue; (c._farT=c._farT||{})[p.id]=now; }
+    try{c.send(raw);}catch{}
+  }
+}
 function broadcastAll(data){const raw=JSON.stringify(data);for(const c of wss.clients)if(c.readyState===WebSocket.OPEN)try{c.send(raw);}catch{}}
 
 function userFromWsReq(req){
@@ -2782,6 +2852,7 @@ function attachUpgrade(server){server.on('upgrade',(req,socket,head)=>{
     if(auth && db.users[auth.key] && (db.users[auth.key].banned || (db.bans&&db.bans[auth.key]))){
       socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
     }
+    if(maintenanceOn()&&!(auth&&isOwnerKey(auth.key))){ try{ws.send(JSON.stringify({type:'server_restart',msg:MAINT_MSG}));}catch{} try{ws.close(1013,'maintenance');}catch{} const n=(socketsByIp.get(ip)||1)-1; if(n>0)socketsByIp.set(ip,n); else socketsByIp.delete(ip); return; }
     ws._userKey=auth?auth.key:null;
     ws._username=auth?auth.username:null;
     wss.emit('connection',ws,req);
@@ -2804,16 +2875,7 @@ wss.on('connection',ws=>{
   Object.defineProperty(p,'lastHit',{value:0,writable:true,enumerable:false});
   Object.defineProperty(p,'wasAlive',{value:false,writable:true,enumerable:false});
   Object.defineProperty(p,'reviveUntil',{value:0,writable:true,enumerable:false});
-  // 같은 계정의 기존 접속은 종료 (내 캐릭터가 복제되어 보이는 현상 방지)
-  if(ws._userKey){
-    for(const o of wss.clients){
-      if(o!==ws&&o._userKey===ws._userKey){
-        try{o.send(JSON.stringify({type:'dup', reason:'다른 기기에서 로그인했습니다'}));}catch{}
-        try{o.close(4001,'logged in from another device');}catch{}
-        if(o.player){players.delete(o.player.id);wsById.delete(o.player.id);broadcast({type:'leave',id:o.player.id});}
-      }
-    }
-  }
+  // 같은 계정으로 여러 기기 동시 접속 허용 (각 접속은 별도 캐릭터로 표시)
   players.set(id,p); ws.player=p; wsById.set(id,ws);
   ws._tokens=40; ws._tokT=Date.now();
 
@@ -2868,7 +2930,7 @@ wss.on('connection',ws=>{
       if(Number.isFinite(m.shirt)) p.shirt = Math.floor(m.shirt) & 0xffffff;
       if(Number.isFinite(m.skin)) p.skin = Math.floor(m.skin) & 0xffffff;
       if(m.look && typeof m.look==='object') p.look = m.look;
-      broadcast({type:'state',player:p},ws);
+      broadcastState(p,ws,now);
       // atk 플래그는 1회성
       p.atk = 0;
       return;
@@ -3024,6 +3086,7 @@ wss.on('connection',ws=>{
     persistSoon();
     try{ trade.onClose(p); }catch{}
     try{ partyLeave(p,''); invites.delete(p.id); for(const [to,iv] of invites) if(iv.from===p.id) invites.delete(to); }catch{}
+    try{clearInterval(ws._heartbeat);}catch{}
     players.delete(p.id); wsById.delete(p.id);
     broadcast({type:'leave',id:p.id});
     const n=(socketsByIp.get(ws._ip)||1)-1;
