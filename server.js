@@ -557,9 +557,10 @@ function killMonster(m, d, p) {
   }
 }
 const MAX_HIT_DMG = 500000;
-// 레벨업에 필요한 경험치: Lv1=30. 올라가는 레벨 기준 배율 — ~Lv40: x1.5 / 41~99: x1.2 / 100~299: x1.1 / 300~: x1.05
+// 레벨업에 필요한 경험치: Lv1=30. 모든 레벨 구간에서 레벨당 x1.1 로 통일
 const NX_CAP = Number.MAX_SAFE_INTEGER;
-function nxMult(lv) { return lv <= 40 ? 1.5 : lv <= 99 ? 1.2 : lv <= 299 ? 1.1 : 1.05; }
+const NX_RATE = 1.1;
+function nxMult(lv) { return NX_RATE; }
 function nxForLevel(lv) {
   lv = Math.max(1, Math.floor(Number(lv) || 1));
   let nx = 30;
@@ -1230,10 +1231,18 @@ function copyExtraPlayerFields(p, player) {
     size += s; player[k] = c; n++;
   }
 }
-// 서버가 권한을 가진 값(환생 횟수, 죽음의 신 상태)은 클라이언트의 오래된 저장본이 덮어쓰지 못하게 한다
+// 서버가 권한을 가진 값(환생·스탯·죽음의 신 상태)은 클라이언트의 오래된 저장본이 덮어쓰지 못하게 한다
 function keepServerAuth(prev, np) {
   if (!prev || !np) return;
   if ((prev.rebirth | 0) > (np.rebirth | 0)) np.rebirth = prev.rebirth | 0;
+  if ((prev.rcoin | 0) > (np.rcoin | 0)) np.rcoin = prev.rcoin | 0;
+  if ((prev.rstat | 0) > (np.rstat | 0)) np.rstat = prev.rstat | 0;
+  if (prev.rbMult && typeof prev.rbMult === 'object') {
+    if (!np.rbMult || typeof np.rbMult !== 'object') np.rbMult = {};
+    for (const k of ['atk', 'hp', 'exp', 'rcoin', 'rebirth', 'rstat']) {
+      if ((prev.rbMult[k] | 0) > (np.rbMult[k] | 0)) np.rbMult[k] = prev.rbMult[k] | 0;
+    }
+  }
   if (prev.deathSkills && typeof prev.deathSkills === 'object') np.deathSkills = Object.assign({}, prev.deathSkills);
   if (prev.deathLives != null) np.deathLives = prev.deathLives;
   if (prev.deathReborn) np.deathReborn = true;
@@ -1396,7 +1405,29 @@ app.post('/api/save',requireUser,(req,res)=>{
   persistSoon();
   res.json({ok:true,savedAt:state.savedAt});
 });
-app.post('/api/save-beacon',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).end();let body=req.body;if(typeof body==='string'){try{body=JSON.parse(body);}catch{return res.status(400).end();}}const state=cleanState(body&&body.state);if(!state)return res.status(400).end();{const pv=db.states[key]&&db.states[key].player;if(pv){if(pv.bank)state.player.bank=pv.bank;if(typeof pv.coin==='number'&&typeof state.player.coin==='number'&&pv.coin>state.player.coin)state.player.coin=pv.coin;if((pv.rcoin|0)>(state.player.rcoin|0))state.player.rcoin=pv.rcoin|0;if((pv.rstat|0)>(state.player.rstat|0))state.player.rstat=pv.rstat|0;}}keepServerAuth(db.states[key]&&db.states[key].player,state.player);db.states[key]=state;persistSoon();res.status(204).end();});
+app.post('/api/save-beacon',(req,res)=>{
+  const key=userFromReq(req);if(!key)return res.status(401).end();
+  let body=req.body;if(typeof body==='string'){try{body=JSON.parse(body);}catch{return res.status(400).end();}}
+  const state=cleanState(body&&body.state);if(!state)return res.status(400).end();
+  const pv=db.states[key]&&db.states[key].player;
+  if(pv){
+    if(pv.bank) state.player.bank=pv.bank;
+    if(typeof pv.coin==='number'&&typeof state.player.coin==='number'&&pv.coin>state.player.coin) state.player.coin=pv.coin;
+    if((pv.rcoin|0)>(state.player.rcoin|0)) state.player.rcoin=pv.rcoin|0;
+    if((pv.rstat|0)>(state.player.rstat|0)) state.player.rstat=pv.rstat|0;
+    if(pv.rbMult&&typeof pv.rbMult==='object'){
+      if(!state.player.rbMult) state.player.rbMult={};
+      for(const k of ['atk','hp','exp','rcoin','rebirth','rstat']){
+        if((pv.rbMult[k]|0)>(state.player.rbMult[k]|0)) state.player.rbMult[k]=pv.rbMult[k]|0;
+      }
+    }
+    if((pv.rebirth|0)>(state.player.rebirth|0)) state.player.rebirth=pv.rebirth|0;
+  }
+  keepServerAuth(pv, state.player);
+  db.states[key]=state;
+  persistSoon();
+  res.status(204).end();
+});
 app.post('/api/logout',(req,res)=>{clearCookie(req,res);res.json({ok:true});});
 
 app.post('/api/buy', requireUser, (req, res) => {
@@ -1510,6 +1541,20 @@ app.post('/api/admin/appoint', requireAdmin, (req,res)=>{
   if(u.isAdmin) return res.status(400).json({error:'이미 최고 관리자입니다.'});
   u.isSubAdmin=!!on;
   try{persist(); res.json({ok:true, username:u.username, isSubAdmin:!!u.isSubAdmin});}
+  catch(e){res.status(500).json({error:'저장 실패'});}
+});
+// 최고 관리자만: 비밀번호 재설정 (원문 비밀번호는 scrypt 해시만 저장되어 조회 불가 → 재설정으로 대응)
+app.post('/api/admin/reset-password', requireAdmin, (req,res)=>{
+  const {username, password} = req.body||{};
+  if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
+  if(typeof password!=='string'||!validPassword(password)) return res.status(400).json({error:'비밀번호는 8~128자로 입력하세요.'});
+  const key=usernameKey(username); const u=db.users[key];
+  if(!u) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
+  if(u.isAdmin && key!==req.userKey) return res.status(400).json({error:'다른 최고 관리자의 비밀번호는 변경할 수 없습니다.'});
+  const salt=crypto.randomBytes(16).toString('hex');
+  u.salt=salt;
+  u.passwordHash=hashPassword(password, salt);
+  try{persist(); res.json({ok:true, username:u.username});}
   catch(e){res.status(500).json({error:'저장 실패'});}
 });
 app.get('/api/admin/users', requireStaff, (req,res)=>{
@@ -2175,8 +2220,8 @@ app.post('/api/rebirth', requireUser, (req, res) => {
     const step = (p.rebirth|0) - rbGain + 1 + i; // 각 단계 환생 번호
     rcoinBase += 5 * Math.max(1, step);
   }
-  const rcoinGain = Math.floor(rcoinBase * Math.pow(2, (p.rbMult&&p.rbMult.rcoin)|0));
-  const rstatGain = Math.floor(rbGain * Math.pow(2, (p.rbMult&&p.rbMult.rstat)|0));
+  const rcoinGain = Math.floor(rcoinBase * Math.pow(RSTAT_BASE, (p.rbMult&&p.rbMult.rcoin)|0));
+  const rstatGain = Math.floor(rbGain * Math.pow(RSTAT_BASE, (p.rbMult&&p.rbMult.rstat)|0));
   p.rcoin = (p.rcoin|0) + rcoinGain;
   p.rstat = (p.rstat|0) + rstatGain;
   p.title = REBIRTH_TITLES[Math.min(REBIRTH_TITLES.length-1, p.rebirth)] || '환생자';
@@ -2218,14 +2263,15 @@ app.post('/api/rebirth', requireUser, (req, res) => {
 });
 
 // ===== 환생 스탯 업그레이드 =====
-// 배율 = 2^level, 비용 = base * 2^level (업글할 때마다 2배)
+// 효과 배율 = 3^level (업글할 때마다 3배), 비용 = base * 2^level (업글할 때마다 2배)
+const RSTAT_BASE = 3;
 const RSTAT_DEFS = {
-  atk:     { name:'공격력 2배', base:1 },
-  hp:      { name:'체력 2배', base:1 },
-  exp:     { name:'경험치 2배', base:1 },
-  rcoin:   { name:'환생 코인 2배', base:4 },
-  rebirth: { name:'환생 횟수 효과 2배', base:4 },
-  rstat:   { name:'환생 스탯 2배', base:6 }
+  atk:     { name:'공격력 3배', base:1 },
+  hp:      { name:'체력 3배', base:1 },
+  exp:     { name:'경험치 3배', base:1 },
+  rcoin:   { name:'환생 코인 3배', base:4 },
+  rebirth: { name:'환생 횟수 효과 3배', base:4 },
+  rstat:   { name:'환생 스탯 3배', base:6 }
 };
 function rstatCost(id, level){
   const d = RSTAT_DEFS[id]; if(!d) return null;
@@ -2236,7 +2282,7 @@ app.get('/api/rebirth/stat/info', requireUser, (req, res) => {
   const info = {};
   for(const [id,d] of Object.entries(RSTAT_DEFS)){
     const lv = (p.rbMult&&p.rbMult[id])|0;
-    info[id] = { name:d.name, level:lv, mult:Math.pow(2,lv), cost:rstatCost(id,lv), nextMult:Math.pow(2,lv+1) };
+    info[id] = { name:d.name, level:lv, mult:Math.pow(RSTAT_BASE,lv), cost:rstatCost(id,lv), nextMult:Math.pow(RSTAT_BASE,lv+1) };
   }
   res.json({ ok:true, rstat:p.rstat|0, rbMult:p.rbMult||{}, info });
 });
@@ -2254,7 +2300,7 @@ app.post('/api/rebirth/stat', requireUser, (req, res) => {
   db.states[req.userKey].savedAt = Date.now();
   try { persist(); } catch(e) {}
   res.json({
-    ok:true, id, level:p.rbMult[id], mult:Math.pow(2,p.rbMult[id]),
+    ok:true, id, level:p.rbMult[id], mult:Math.pow(RSTAT_BASE,p.rbMult[id]),
     rstat:p.rstat, rbMult:p.rbMult,
     nextCost: rstatCost(id, p.rbMult[id])
   });
@@ -2617,8 +2663,8 @@ wss.on('connection',ws=>{
   if(ws._userKey){
     for(const o of wss.clients){
       if(o!==ws&&o._userKey===ws._userKey){
-        try{o.send(JSON.stringify({type:'dup'}));}catch{}
-        try{o.close(4001,'duplicate login');}catch{}
+        try{o.send(JSON.stringify({type:'dup', reason:'다른 기기에서 로그인했습니다'}));}catch{}
+        try{o.close(4001,'logged in from another device');}catch{}
         if(o.player){players.delete(o.player.id);wsById.delete(o.player.id);broadcast({type:'leave',id:o.player.id});}
       }
     }
