@@ -97,6 +97,55 @@ function persist() {
   });
 }
 
+// MongoDB 에서 해당 유저의 salt/passwordHash 를 다시 읽어 메모리에 반영 (다중 인스턴스·저장 레이스 대응)
+async function reloadUserAuth(key) {
+  if (!mongoCol || !key) return db.users[key] || null;
+  try {
+    const doc = await mongoCol.findOne(
+      { _id: MONGO_DOC_ID },
+      { projection: { ['users.' + key]: 1 } }
+    );
+    const remote = doc && doc.users && doc.users[key];
+    if (remote && typeof remote === 'object') {
+      if (!db.users[key]) db.users[key] = remote;
+      else {
+        if (typeof remote.passwordHash === 'string') db.users[key].passwordHash = remote.passwordHash;
+        if (typeof remote.salt === 'string') db.users[key].salt = remote.salt;
+        if (remote.isAdmin != null) db.users[key].isAdmin = !!remote.isAdmin;
+        if (remote.isSubAdmin != null) db.users[key].isSubAdmin = !!remote.isSubAdmin;
+        if (remote.banned != null) db.users[key].banned = !!remote.banned;
+        if (typeof remote.username === 'string') db.users[key].username = remote.username;
+      }
+    }
+  } catch (e) {
+    console.error('reloadUserAuth', key, e.message);
+  }
+  return db.users[key] || null;
+}
+
+// 비밀번호를 메모리 + MongoDB 필드 단위로 동시 갱신 (전체 문서 덮어쓰기 레이스 방지)
+async function setUserPassword(key, password) {
+  const u = db.users[key];
+  if (!u) throw new Error('user not found');
+  const salt = crypto.randomBytes(16).toString('hex');
+  const passwordHash = hashPassword(password, salt);
+  u.salt = salt;
+  u.passwordHash = passwordHash;
+  if (!mongoCol) throw new Error('MongoDB not connected');
+  // 1) 해당 유저 인증 필드만 즉시 기록
+  await mongoCol.updateOne(
+    { _id: MONGO_DOC_ID },
+    { $set: {
+      ['users.' + key + '.salt']: salt,
+      ['users.' + key + '.passwordHash']: passwordHash,
+      updatedAt: new Date()
+    }}
+  );
+  // 2) 전체 문서도 동기화 (다른 필드와 일치)
+  await persist();
+  return u;
+}
+
 // 저장 요청이 몰려도 1초에 한 번만 MongoDB 에 쓴다
 let _persistT = null;
 let _persistDirty = false;
@@ -1348,15 +1397,28 @@ app.post('/api/register',authLimiter,(req,res)=>{
  const token=newToken(key);cookie(req,res,token);
  res.status(201).json({user:username,state:null,token});
 });
-app.post('/api/login',authLimiter,(req,res)=>{
- const {username,password}=req.body||{};if(typeof username!=='string'||typeof password!=='string')return res.status(400).json({error:'아이디와 비밀번호를 입력하세요.'});
- const key=usernameKey(username),u=db.users[key];
- const salt=u?u.salt:'00000000000000000000000000000000';
- const actual=hashPassword(password,salt),expected=u?u.passwordHash:'0'.repeat(128);
- if(!u||!safeEqual(actual,expected))return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
- if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});
- const token=newToken(key);cookie(req,res,token);
- if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});
+app.post('/api/login',authLimiter,async(req,res)=>{
+ try{
+  const {username,password}=req.body||{};
+  if(typeof username!=='string'||typeof password!=='string')return res.status(400).json({error:'아이디와 비밀번호를 입력하세요.'});
+  const key=usernameKey(username.trim());
+  // 로그인 직전 MongoDB 에서 최신 salt/hash 로드 (비번 재설정 직후 반영)
+  let u = await reloadUserAuth(key);
+  if(!u) u = db.users[key];
+  const salt = (u && typeof u.salt==='string' && u.salt) ? u.salt : '00000000000000000000000000000000';
+  const expected = (u && typeof u.passwordHash==='string' && u.passwordHash) ? u.passwordHash : '0'.repeat(128);
+  const actual = hashPassword(password, salt);
+  if(!u || !safeEqual(actual, expected)){
+    return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
+  }
+  if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});
+  const token=newToken(key);cookie(req,res,token);
+  if(db.states[key]&&db.states[key].player)ensurePlayer(key);
+  res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});
+ }catch(e){
+  console.error('login error', e);
+  res.status(500).json({error:'로그인 처리 중 오류가 발생했습니다.'});
+ }
 });
 app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});});
 app.post('/api/save',requireUser,(req,res)=>{
@@ -1550,16 +1612,18 @@ app.post('/api/admin/reset-password', requireAdmin, async (req,res)=>{
     if(typeof username!=='string' || !username.trim()) return res.status(400).json({error:'아이디가 필요합니다.'});
     if(typeof password!=='string'||!validPassword(password)) return res.status(400).json({error:'비밀번호는 8~128자로 입력하세요.'});
     const key=usernameKey(username.trim());
-    const u=db.users[key];
+    // Mongo 최신 유저 정보 확보
+    let u = await reloadUserAuth(key);
+    if(!u) u = db.users[key];
     if(!u) return res.status(404).json({error:'사용자를 찾을 수 없습니다: '+username});
-    // 다른 최고 관리자 비번은 변경 불가 (본인 ADMIN 은 가능)
     if(u.isAdmin && key!==req.userKey) return res.status(400).json({error:'다른 최고 관리자의 비밀번호는 변경할 수 없습니다.'});
-    const salt=crypto.randomBytes(16).toString('hex');
-    u.salt=salt;
-    u.passwordHash=hashPassword(password, salt);
-    await persist(); // MongoDB 에 즉시 반영
-    console.log('[admin] password reset for', u.username, 'by', req.userKey);
-    res.json({ok:true, username:u.username});
+    await setUserPassword(key, password);
+    // 저장 직후 다시 읽어 검증
+    const check = await reloadUserAuth(key);
+    const ok = check && safeEqual(hashPassword(password, check.salt), check.passwordHash);
+    if(!ok) return res.status(500).json({error:'비밀번호가 MongoDB에 반영되지 않았습니다. 잠시 후 다시 시도하세요.'});
+    console.log('[admin] password reset OK for', check.username, 'by', req.userKey);
+    res.json({ok:true, username:check.username, verified:true});
   }catch(e){
     console.error('[admin] reset-password', e);
     res.status(500).json({error:'저장 실패: '+(e&&e.message?e.message:'unknown')});
@@ -2251,9 +2315,19 @@ app.post('/api/rebirth', requireUser, (req, res) => {
   if (!p.ow.includes(p.w|0)) { p.w = 0; p.we = 0; }
   if (!p.oa.includes(p.a|0)) { p.a = 0; p.ae = 0; }
   p.pot = [2, 0, 0, 0];
-  if (p.job==='magesword') p.msUnlocked = true; // 마검사는 환생 후에도 재전직 가능
-  p.job = ''; p.jstep = 0; p.jm = 1; p.jhp = 1; // 직업 초기화
+  // 마검사: 환생해도 직업 유지 (초기화하지 않음)
+  const keepMagesword = (p.job === 'magesword') || !!p.msUnlocked;
+  if (keepMagesword) p.msUnlocked = true;
+  const wasDeath = (p.job === 'deathgod') || (prevRb >= 500);
+  if (keepMagesword) {
+    p.job = 'magesword';
+    p.jstep = 0.34; p.jm = 1.3; p.jhp = 1.6;
+  } else {
+    p.job = ''; p.jstep = 0; p.jm = 1; p.jhp = 1;
+  }
+  // 죽음의 신(환생 500+)은 최우선으로 유지
   if(p.rebirth >= 500){ p.job='deathgod'; if(prevRb < 500){ p.deathLives=2; p.deathReborn=false; p.deathSkills={guide:false,scythe:false,evadeUntil:0,spears:false,soul:false,harvest:false,execution:false,executionUntil:0,evadeCd:0}; } p.title='죽음의 신'; }
+  else if (wasDeath && p.job !== 'magesword') { /* 500 미만으로 내려간 경우만 해제 */ }
   // 환생해도 누적된 최대 체력/환생 스탯 보너스는 유지
   p.mhp = Math.max(100, Math.floor(Number(p.mhp)||100));
   p.hp = p.mhp;
@@ -2263,7 +2337,7 @@ app.post('/api/rebirth', requireUser, (req, res) => {
   pushAdminStat(req.userKey, { lv:p.lv, xp:p.xp, nx:p.nx, hp:p.hp, mhp:p.mhp, coin:p.coin });
   const deathAwakened = awakenDeathGod(req.userKey, p);   // 500회 달성 시 컷씬 + 전직 (최초 1회)
   res.json({
-    ok:true, rebirth:p.rebirth, rbGain, job:p.job, deathAwakened, cutscene:deathAwakened, deathSkills:p.deathSkills, deathLives:p.deathLives, death:deathInfo(req.userKey), rcoin:p.rcoin, rstat:p.rstat, rbMult:p.rbMult, title:p.title,
+    ok:true, rebirth:p.rebirth, rbGain, job:p.job, msUnlocked:!!p.msUnlocked, deathAwakened, cutscene:deathAwakened, deathSkills:p.deathSkills, deathLives:p.deathLives, death:deathInfo(req.userKey), rcoin:p.rcoin, rstat:p.rstat, rbMult:p.rbMult, title:p.title,
     rcoinGain, rstatGain,
     lv:p.lv, xp:p.xp, nx:p.nx, talentPts:p.talentPts,
     coin:p.coin, w:p.w, a:p.a, ow:p.ow, oa:p.oa, sw:p.sw, we:p.we, ae:p.ae, pot:p.pot, mhp:p.mhp, hp:p.hp
