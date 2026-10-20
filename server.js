@@ -1885,7 +1885,7 @@ app.post('/api/admin/map-overrides', requireAdmin, async (req, res) => {
 // ===================================================================================
 //  통계 / 파티 / 길드 / 리더보드  (모두 서버 권한 — 클라이언트는 요청만 보냄)
 // ===================================================================================
-const PARTY_MAX = 4, PARTY_SHARE_RANGE = 160;
+const PARTY_MAX = 5, PARTY_SHARE_RANGE = 160;
 const parties = new Map(), invites = new Map();
 let partySeq = 0;
 const jerr = (res, text, code) => res.status(code || 400).json({ error: text });
@@ -2292,8 +2292,8 @@ app.post('/api/rebirth', requireUser, (req, res) => {
     const step = (p.rebirth|0) - rbGain + 1 + i; // 각 단계 환생 번호
     rcoinBase += 5 * Math.max(1, step);
   }
-  const rcoinGain = Math.floor(rcoinBase * Math.pow(RSTAT_BASE, (p.rbMult&&p.rbMult.rcoin)|0));
-  const rstatGain = Math.floor(rbGain * Math.pow(RSTAT_BASE, (p.rbMult&&p.rbMult.rstat)|0));
+  const rcoinGain = Math.floor(rcoinBase * rbMulLv((p.rbMult&&p.rbMult.rcoin)|0));
+  const rstatGain = Math.floor(rbGain * rbMulLv((p.rbMult&&p.rbMult.rstat)|0));
   p.rcoin = (p.rcoin|0) + rcoinGain;
   p.rstat = (p.rstat|0) + rstatGain;
   p.title = REBIRTH_TITLES[Math.min(REBIRTH_TITLES.length-1, p.rebirth)] || '환생자';
@@ -2345,15 +2345,15 @@ app.post('/api/rebirth', requireUser, (req, res) => {
 });
 
 // ===== 환생 스탯 업그레이드 =====
-// 효과 배율 = 3^level (업글할 때마다 3배), 비용 = base * 2^level (업글할 때마다 2배)
-const RSTAT_BASE = 3;
+// 효과 배율 = level+1 (0→×1, 1→×2, 2→×3 …), 비용 = base * 2^level
+function rbMulLv(lv){ return Math.max(1, (lv|0) + 1); }
 const RSTAT_DEFS = {
-  atk:     { name:'공격력 3배', base:1 },
-  hp:      { name:'체력 3배', base:1 },
-  exp:     { name:'경험치 3배', base:1 },
-  rcoin:   { name:'환생 코인 3배', base:4 },
-  rebirth: { name:'환생 횟수 효과 3배', base:4 },
-  rstat:   { name:'환생 스탯 3배', base:6 }
+  atk:     { name:'공격력', base:1 },
+  hp:      { name:'체력', base:1 },
+  exp:     { name:'경험치', base:1 },
+  rcoin:   { name:'환생 코인', base:4 },
+  rebirth: { name:'환생 효과', base:4 },
+  rstat:   { name:'환생 스탯', base:6 }
 };
 function rstatCost(id, level){
   const d = RSTAT_DEFS[id]; if(!d) return null;
@@ -2364,7 +2364,7 @@ app.get('/api/rebirth/stat/info', requireUser, (req, res) => {
   const info = {};
   for(const [id,d] of Object.entries(RSTAT_DEFS)){
     const lv = (p.rbMult&&p.rbMult[id])|0;
-    info[id] = { name:d.name, level:lv, mult:Math.pow(RSTAT_BASE,lv), cost:rstatCost(id,lv), nextMult:Math.pow(RSTAT_BASE,lv+1) };
+    info[id] = { name:d.name, level:lv, mult:rbMulLv(lv), cost:rstatCost(id,lv), nextMult:rbMulLv(lv+1) };
   }
   res.json({ ok:true, rstat:p.rstat|0, rbMult:p.rbMult||{}, info });
 });
@@ -2382,7 +2382,7 @@ app.post('/api/rebirth/stat', requireUser, (req, res) => {
   db.states[req.userKey].savedAt = Date.now();
   try { persist(); } catch(e) {}
   res.json({
-    ok:true, id, level:p.rbMult[id], mult:Math.pow(RSTAT_BASE,p.rbMult[id]),
+    ok:true, id, level:p.rbMult[id], mult:rbMulLv(p.rbMult[id]),
     rstat:p.rstat, rbMult:p.rbMult,
     nextCost: rstatCost(id, p.rbMult[id])
   });
