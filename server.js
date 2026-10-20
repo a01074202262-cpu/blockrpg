@@ -301,6 +301,28 @@ Object.assign(WORLD.ZT, {
 // ===== 천상 지역 (최고 난이도, 화산 북쪽) =====
 WORLD.ZD.heaven = [[-420,-260,-520,-460]];
 WORLD.ZD.abyss = [[-520,-360,-620,-520]]; // 심연 지대 (천상 서쪽)
+// 시작마을 북쪽(+z) 바다 · 심해 · 깊은 심해
+WORLD.ZD.sea = [[-90,90,72,102]];       // 심해 (경사 끝 ~ 다음 경사 전)
+WORLD.ZD.deepsea = [[-90,90,132,180]];  // 깊은 심해
+Object.assign(WORLD.MT, {
+  fish:{hp:800,dmg:40,xp:120,g:40,sp:6,reach:2.2,rt:10,sc:1.1,n:14,nm:'심해 어류'},
+  shark:{hp:2500,dmg:90,xp:400,g:120,sp:8,reach:3.2,rt:14,sc:1.6,n:10,nm:'상어'},
+  jellyfish:{hp:1200,dmg:55,xp:200,g:60,sp:4,reach:2.5,rt:12,sc:1.2,n:12,nm:'해파리'},
+  crab:{hp:3000,dmg:80,xp:350,g:100,sp:4.5,reach:2.8,rt:14,sc:1.4,n:10,nm:'거대 게'},
+  seaserpent:{hp:80000,dmg:400,xp:8000,g:3000,sp:6,reach:5,rt:180,sc:2.8,n:1,ag:28,cd:1.8,boss:1,pos:[0,90],nm:'바다뱀'},
+  // 깊은 심해: 체력 100만+, 데미지 5천+
+  abyssfish:{hp:1200000,dmg:5200,xp:80000,g:25000,sp:6.5,reach:3.0,rt:16,sc:1.5,n:12,nm:'심연어'},
+  leviathan:{hp:2500000,dmg:7000,xp:180000,g:60000,sp:5.5,reach:4.5,rt:20,sc:2.4,n:8,nm:'리바이어던 새끼'},
+  angler:{hp:1800000,dmg:6000,xp:120000,g:40000,sp:5,reach:3.5,rt:18,sc:1.8,n:10,nm:'아귀'},
+  kraken:{hp:15000000,dmg:12000,xp:1500000,g:400000,sp:4.5,reach:8,rt:480,sc:4.0,n:1,ag:40,cd:2.2,boss:1,pos:[0,145],nm:'크라켄'}
+});
+Object.assign(WORLD.ZT, {
+  fish:'sea', shark:'sea', jellyfish:'sea', crab:'sea', seaserpent:'sea',
+  abyssfish:'deepsea', leviathan:'deepsea', angler:'deepsea', kraken:'deepsea'
+});
+WORLD.BOSS.seaserpent=[0,90];
+WORLD.BOSS.kraken=[0,145];
+
 Object.assign(WORLD.MT, {
   cherub:{hp:60000,dmg:900,xp:7000,g:2500,sp:6,reach:2.6,rt:14,sc:1.3,n:10,nm:'케루빔'},
   seraphim:{hp:80000,dmg:1100,xp:9000,g:3200,sp:6.5,reach:2.8,rt:15,sc:1.4,n:10,nm:'하급 천사'},
