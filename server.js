@@ -1456,7 +1456,7 @@ function cleanState(input){
  return {version:1,player,camera,savedAt:Date.now()};
 }
 app.post('/api/register',authLimiter,(req,res)=>{
- if(maintenanceOn())return res.status(503).json({error:MAINT_MSG});
+ if(maintenanceOn())return res.status(503).json({error:maintMsg()});
  const {username,password}=req.body||{};
  if(!validUsername(username))return res.status(400).json({error:'아이디는 한글/영문/숫자/._- 조합으로 3~24자 입력하세요.'});
  if(!validPassword(password))return res.status(400).json({error:'비밀번호는 8~128자로 입력하세요.'});
@@ -1483,7 +1483,7 @@ app.post('/api/login',authLimiter,async(req,res)=>{
     return res.status(401).json({error:'아이디 또는 비밀번호가 올바르지 않습니다.'});
   }
   if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});
-  if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:MAINT_MSG});
+  if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:maintMsg()});
   const token=startSession(key);cookie(req,res,token);
   if(db.states[key]&&db.states[key].player)ensurePlayer(key);
   sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:u.username,state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});
@@ -1492,7 +1492,7 @@ app.post('/api/login',authLimiter,async(req,res)=>{
   res.status(500).json({error:'로그인 처리 중 오류가 발생했습니다.'});
  }
 });
-app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:MAINT_MSG});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});});
+app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:maintMsg()});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,token});});
 app.post('/api/save',requireUser,(req,res)=>{
   const state=cleanState(req.body&&req.body.state);
   if(!state)return res.status(400).json({error:'저장 데이터 형식이 올바르지 않습니다.'});
@@ -1655,12 +1655,16 @@ function pushAdminStat(key, patch){
 }
 // 점검 모드: 최고 관리자만 접속 가능 (db.mapOverrides.maintenance 에 저장 → 재시작 후에도 유지)
 let restarting = false;
-const MAINT_MSG = '서버 재시작 중입니다. 잠시 후 다시 접속해 주세요.';
+const MAINT_MSG_RESTART = '서버 재시작 중입니다. 잠시 후 다시 접속해 주세요.';
+const MAINT_MSG_PRIVATE = '🔒 서버가 비공개 처리되었습니다. 최고 관리자가 해제할 때까지 접속할 수 없습니다.';
+function privateOn(){ return !!(db.mapOverrides && db.mapOverrides.maintenance); }
+function maintMsg(){ return privateOn() ? MAINT_MSG_PRIVATE : MAINT_MSG_RESTART; }
+function maintPacket(){ return JSON.stringify({type:'server_restart',msg:maintMsg(),private:privateOn()}); }
 function maintenanceOn(){ return restarting || !!(db.mapOverrides && db.mapOverrides.maintenance); }
 function kickNonOwners(msg){
   for(const ws of wss.clients){
     if(isOwnerKey(ws._userKey)) continue;
-    try{ if(ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify({type:'server_restart',msg:msg||MAINT_MSG})); }catch{}
+    try{ if(ws.readyState===WebSocket.OPEN) ws.send(maintPacket()); }catch{}
     setTimeout(()=>{ try{ws.close(1012,'maintenance');}catch{} },1200);
   }
 }
@@ -1694,7 +1698,7 @@ app.post('/api/admin/restart', requireAdmin, async (req,res)=>{
   res.json({ok:true,delaySec:delay,ownerOnly});
   try{ broadcastAll({type:'announce',text:'⚠ '+(delay>0?delay+'초 뒤 ':'')+'서버가 재시작됩니다. 잠시 후 다시 접속해 주세요.'}); }catch{}
   setTimeout(async()=>{
-    try{ kickNonOwners(MAINT_MSG); }catch{}
+    try{ kickNonOwners(); }catch{}
     try{ await persist(); }catch(e){ console.error('restart persist',e.message); }
     setTimeout(()=>{
       try{ for(const ws of wss.clients){ try{ws.close(1012,'restart');}catch{} } }catch{}
@@ -1707,7 +1711,7 @@ app.post('/api/admin/maintenance', requireAdmin, async (req,res)=>{
   if(!db.mapOverrides) db.mapOverrides={version:1,objects:[],equipment:{}};
   db.mapOverrides.maintenance=on;
   try{ await persist(); }catch{}
-  if(on) kickNonOwners(MAINT_MSG);
+  if(on) kickNonOwners();
   res.json({ok:true,maintenance:on});
 });
 app.get('/api/admin/maintenance', requireAdmin, (req,res)=>res.json({maintenance:maintenanceOn(),restarting}));
@@ -2852,7 +2856,7 @@ function attachUpgrade(server){server.on('upgrade',(req,socket,head)=>{
     if(auth && db.users[auth.key] && (db.users[auth.key].banned || (db.bans&&db.bans[auth.key]))){
       socket.write('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
     }
-    if(maintenanceOn()&&!(auth&&isOwnerKey(auth.key))){ try{ws.send(JSON.stringify({type:'server_restart',msg:MAINT_MSG}));}catch{} try{ws.close(1013,'maintenance');}catch{} const n=(socketsByIp.get(ip)||1)-1; if(n>0)socketsByIp.set(ip,n); else socketsByIp.delete(ip); return; }
+    if(maintenanceOn()&&!(auth&&isOwnerKey(auth.key))){ try{ws.send(maintPacket());}catch{} try{ws.close(1013,'maintenance');}catch{} const n=(socketsByIp.get(ip)||1)-1; if(n>0)socketsByIp.set(ip,n); else socketsByIp.delete(ip); return; }
     ws._userKey=auth?auth.key:null;
     ws._username=auth?auth.username:null;
     wss.emit('connection',ws,req);
