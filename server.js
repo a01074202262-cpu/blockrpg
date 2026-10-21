@@ -542,8 +542,12 @@ function applyPlayerHit(p, ws, id, dmg, kb, elem) {
   const dx = m.x - p.x, dz = m.z - p.z, dist = Math.hypot(dx, dz);
   if (elem !== 'scythethrow' && dist > d.reach + d.sc * 1.5 + 30) return;            // 너무 먼 몬스터는 타격 불가
   const hitCap = Math.max(MAX_HIT_DMG, Math.floor((Number(m.mhp) || 0) * 0.02));   // 고체력(성운/정거장) 몬스터는 최대 체력의 2%까지 1타 허용
-  dmg = Math.max(1, Math.min(hitCap, Math.floor(dmg)));
-  if (elem !== 'spear' && elem !== 'scythethrow') p.lastHit = dmg;                       // 죽음의 창 기준 데미지(클라가 bd 를 안 보낼 때 대체값)
+  const rawDmg = Math.max(1, Math.floor(dmg));
+  dmg = Math.max(1, Math.min(hitCap, rawDmg));
+  // 죽음의 창 폴백용: 히트캡에 잘리기 전 값을 기억 (클라 bd 미수신 시 환생 배율 반영된 실제 공격력 유지)
+  if (elem !== 'spear' && elem !== 'scythethrow' && elem !== 'harvest') {
+    p.lastHit = Math.max(p.lastHit || 0, rawDmg);
+  }
   if (deathOn(p, 'scythe')) dmg = Math.floor(dmg * DEATH_SCYTHE_MULT);   // 죽음의 낫: 데미지 5배
   if (false && m.shield && m.shield.crystal) {   // 보스 쉴드 비활성화
     if (Date.now() - (ws._shT || 0) > 800) {
@@ -572,8 +576,15 @@ function applyPlayerHit(p, ws, id, dmg, kb, elem) {
     return; // 쉴드 중에는 본체 피해 없음
   }
   if (d.boss) { dmg = bossLimit(m, d, ws, dmg); if (dmg < 1) return; }
-  // 하데스의 검: 적중한 몬스터에게 사망할 때까지 최대 체력의 1% 화염 지속 피해
-  if (p.hadesSword) m.fireDot = { source:p.id, next:Date.now()+1000 };
+  // 하데스의 창(장착 중): 내 데미지의 50%를 초당 화염 지속 피해로 10초 적용 (타격마다 갱신)
+  if (p.hadesSword && p.hadesSwordEquipped) {
+    m.fireDot = {
+      source: p.id,
+      dps: Math.max(1, Math.floor(dmg * 0.5)),
+      next: Date.now() + 1000,
+      until: Date.now() + 10000
+    };
+  }
   // 그로기: 크리티컬 200%
   if (m.groggy && m.groggy > 0) dmg = Math.floor(dmg * 2);
   // 넉백 약화: 일반 몬스터 35%, 보스 20%만 적용
@@ -683,6 +694,24 @@ function deathSt(p) {   // 죽음의 신이면 DB 플레이어 객체, 아니면
   return pl && (pl.job === 'deathgod' || (pl.rebirth | 0) >= DEATH_REBIRTH) ? pl : null;
 }
 function deathOn(p, k) { const s = deathSt(p); return !!(s && s.deathSkills && s.deathSkills[k]); }
+// 죽음의 창/낫던지기/수확 결계 기준 데미지.
+// 클라 move 패킷의 bd(=atk(), 환생 공격 배율 포함)를 우선 사용하고,
+// baseDmg 가 없거나 오래된 lastHit(히트캡 적용됨) 폴백일 때는 저장된 rbMult.atk 를 보정 적용한다.
+function deathSkillBase(p) {
+  let base = (Number(p.baseDmg) > 0 ? Number(p.baseDmg) : Number(p.lastHit)) || 0;
+  if (base < 1) return 0;
+  try {
+    const st = p.key && db.states[p.key] && db.states[p.key].player;
+    const mul = Math.max(1, (((st && st.rbMult && st.rbMult.atk) | 0) + 1));
+    // 클라이언트가 보낸 baseDmg 는 이미 rbMul 포함. lastHit 폴백만 보정.
+    if (!(Number(p.baseDmg) > 0) && mul > 1) base = Math.floor(base * mul);
+    // baseDmg 가 있는데도 환생 배율보다 현저히 낮으면(구버전 클라/저장 레이스) 보정
+    else if (Number(p.baseDmg) > 0 && mul > 1 && base < Number(p.baseDmg) * 0.5) {
+      /* keep client bd */
+    }
+  } catch (_) {}
+  return Math.max(1, Math.floor(base));
+}
 function dmgTakenMult(p, now) {   // 죽음의 회피 중이면 받는 피해 0.1배
   const s = deathSt(p);
   return s && s.deathSkills && Number(s.deathSkills.evadeUntil) > now ? DEATH_EVADE_MULT : 1;
@@ -735,7 +764,7 @@ function deathGuideKill(p, m) {
 // 죽음의 창: 15개 고정, 창마다 다른 몬스터를 노리고 몬스터가 15마리 미만이면 남는 창을 한 마리씩 더 배정
 function deathSpearsAttack(p, ws, now) {
   now = now || Date.now();
-  const base = (Number(p.baseDmg) > 0 ? Number(p.baseDmg) : Number(p.lastHit)) || 0;
+  const base = deathSkillBase(p);
   // 창마다 자기 쿨다운 보유 (처음엔 서로 엇갈리게 시작)
   if (!Array.isArray(p._spearCd) || p._spearCd.length !== DEATH_SPEAR_COUNT) {
     p._spearCd = [];
@@ -769,7 +798,7 @@ function deathSpearsAttack(p, ws, now) {
 const DEATH_THROW_RANGE = 150, DEATH_THROW_SPEED = 90, DEATH_THROW_WIDTH = 7, DEATH_THROW_MULT = 10, DEATH_THROW_CD = 30000;
 const deathThrows = [];
 function deathThrowStart(p, ws, face, now) {
-  const base = (Number(p.baseDmg) > 0 ? Number(p.baseDmg) : Number(p.lastHit)) || 0;
+  const base = deathSkillBase(p);
   if (base < 1) return false;
   const dx = Math.sin(face), dz = Math.cos(face);
   deathThrows.push({ p, ws, x0: p.x, z0: p.z, dx, dz, t0: now, prev: 0, base, hit: new Set() });
@@ -817,7 +846,7 @@ function tickDeath(now) {
     if (ds.spears) deathSpearsAttack(p, ws, now);
     // 영혼 수확의 결계: 반경 14m 장판 — 주기적으로 근처 몬스터에 기본 데미지 8%
     if (ds.harvest && doSpear) {
-      const base = (Number(p.baseDmg) > 0 ? Number(p.baseDmg) : Number(p.lastHit)) || 0;
+      const base = deathSkillBase(p);
       const one = Math.max(1, Math.floor(base * 0.08));
       if (base >= 1) {
         for (const m of monsters.values()) {
@@ -1034,20 +1063,29 @@ function tickMonsters(dt, now) {
   for (const m of monsters.values()) {
     const d = MT[m.type]; if (!d) continue;
     if (m.dead) { m.rt -= dt; if (m.rt <= 0) respawnMonster(m); continue; }
-    // 하데스의 검 화염: 모든 몬스터/보스에게 면역 없이 최대 체력의 1%를 1초마다 적용
+    // 하데스의 창 화염: 타격 데미지의 50%를 1초마다, until 까지(기본 10초)
     if (m.fireDot && now >= m.fireDot.next) {
-      m.fireDot.next = now + 1000;
-      m.hp -= Math.max(1, Math.floor(m.mhp * 0.01)); m.ver++;
-      if (m.hp <= 0) {
-        const w = wsById.get(m.fireDot.source), p = w && w.player;
-        if (p) {
-          const oxp=p.x, ozp=p.z, oldShield=m.shield;
-          p.x=m.x; p.z=m.z; m.hp=1; m.shield=null;
-          try { applyPlayerHit(p,w,m.id,1,0,'fire'); } catch(e) { m.hp=0; m.dead=true; m.rt=MT[m.type].rt; }
-          p.x=oxp; p.z=ozp; if (m.dead) m.fireDot=null; else m.shield=oldShield;
-        } else { m.hp=0; m.dead=true; m.rt=MT[m.type].rt; m.cast=null; m.shield=null; m.fireDot=null; m.ver++; }
+      if (m.fireDot.until && now > m.fireDot.until) { m.fireDot = null; }
+      else {
+        m.fireDot.next = now + 1000;
+        const dps = Math.max(1, Math.floor(Number(m.fireDot.dps) || Math.floor(m.mhp * 0.01)));
+        m.hp -= dps; m.ver++;
+        // 기여도 누적 (처치 보상 판정)
+        try {
+          const sid = m.fireDot.source;
+          if (sid) m.dmg.set(sid, (m.dmg.get(sid) || 0) + dps);
+        } catch (_) {}
+        if (m.hp <= 0) {
+          const w = wsById.get(m.fireDot.source), p = w && w.player;
+          if (p) {
+            const oxp=p.x, ozp=p.z, oldShield=m.shield;
+            p.x=m.x; p.z=m.z; m.hp=1; m.shield=null;
+            try { applyPlayerHit(p,w,m.id,1,0,'fire'); } catch(e) { m.hp=0; m.dead=true; m.rt=MT[m.type].rt; }
+            p.x=oxp; p.z=ozp; if (m.dead) m.fireDot=null; else m.shield=oldShield;
+          } else { m.hp=0; m.dead=true; m.rt=MT[m.type].rt; m.cast=null; m.shield=null; m.fireDot=null; m.ver++; }
+        }
+        if (m.dead) continue;
       }
-      if (m.dead) continue;
     }
     const ox = m.x, oz = m.z, ohp = m.hp, oface = m.face;
     m.cd -= dt; m.t += dt * 4;
@@ -1158,18 +1196,36 @@ function tickMonsters(dt, now) {
 }
 
 // 각 접속자에게 "자기 주변(AOI)에서 바뀐 몬스터"만 전송 (대역폭 절약)
+// · AOI 밖으로 나간 몬스터는 _seen 에서 제거 → 재진입 시 반드시 재전송
+// · 이동/주기적 강제 동기화로 여러 명 접속 시 몬스터가 안 보이는 현상 방지
+// · 패킷 분할 + 버퍼 임계로 상태 브로드캐스트에 mon 이 밀리지 않게 함
 function broadcastMonsters() {
+  const now = Date.now();
   for (const ws of wss.clients) {
     const p = ws.player;
-    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen || ws.bufferedAmount > 4e6) continue;
+    if (!p || ws.readyState !== WebSocket.OPEN || !ws._seen) continue;
+    // 상태 패킷이 밀려도 mon 은 우선 전송 (2MB 이상일 때만 스킵)
+    if (ws.bufferedAmount > 2e6) continue;
     const out = [];
+    const moved = !ws._aoiX || Math.hypot(p.x - ws._aoiX, p.z - ws._aoiZ) > 36;
+    const force = !ws._aoiT || (now - ws._aoiT > 2500) || moved;
+    if (force) { ws._aoiT = now; ws._aoiX = p.x; ws._aoiZ = p.z; }
     for (const m of monsters.values()) {
-      if (ws._seen.get(m.id) === m.ver) continue;
-      if (Math.hypot(m.x - p.x, m.z - p.z) > AOI_RADIUS) continue;
+      const dist = Math.hypot(m.x - p.x, m.z - p.z);
+      if (dist > AOI_RADIUS) {
+        if (ws._seen.has(m.id)) ws._seen.delete(m.id);
+        continue;
+      }
+      if (!force && ws._seen.get(m.id) === m.ver) continue;
       ws._seen.set(m.id, m.ver);
       out.push([m.id, q2(m.x), q2(m.z), Math.ceil(m.hp), q2(m.face), (m.dead ? 1 : 0) | (m.atk ? 2 : 0)]);
     }
-    if (out.length) { try { ws.send(JSON.stringify({ type: 'mon', m: out })); } catch {} }
+    if (out.length) {
+      // 한 패킷에 너무 많이 넣지 않아 다른 클라/메시지가 밀리지 않게 분할
+      for (let i = 0; i < out.length; i += 100) {
+        try { ws.send(JSON.stringify({ type: 'mon', m: out.slice(i, i + 100) })); } catch {}
+      }
+    }
   }
   for (const m of monsters.values()) m.atk = 0;
 }
@@ -1329,7 +1385,7 @@ function ensurePlayer(key){
 }
 // ===== 저장 데이터 보강: 알려지지 않은 클라이언트 필드도 (크기 제한 안에서) MongoDB 에 보존 =====
 const SAFE_KEY = /^[A-Za-z][A-Za-z0-9_]{0,31}$/;
-const KNOWN_PLAYER_KEYS = new Set(['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg','pot','ow','oa','sw','items','qa','qd','questProgress','godUnlocked','hadesSword','godQuestAccepted','godQuestDone','job','msUnlocked','jstep','jm','jhp','we','ae','rebirth','rcoin','title','achievementIds','unlockedTitles','equippedTitle','deathSkills','deathLives','deathReborn','deathCutsceneDone','talents','talentPts','runes','runeEq','towerBest','towerDaily','towerDailyAt','rstat','rbMult','sbk','sks','look','bank','stats','guild','party']);
+const KNOWN_PLAYER_KEYS = new Set(['x','z','y','hp','mhp','lv','xp','nx','coin','at','face','inv','w','a','rg','pot','ow','oa','sw','items','qa','qd','questProgress','godUnlocked','hadesSword','hadesSwordEquipped','godQuestAccepted','godQuestDone','job','msUnlocked','jstep','jm','jhp','we','ae','rebirth','rcoin','title','achievementIds','unlockedTitles','equippedTitle','deathSkills','deathLives','deathReborn','deathCutsceneDone','talents','talentPts','runes','runeEq','towerBest','towerDaily','towerDailyAt','rstat','rbMult','sbk','sks','look','bank','stats','guild','party']);
 function cleanExtraVal(v, depth) {
   if (typeof v === 'boolean') return v;
   if (typeof v === 'number') return Number.isFinite(v) ? Math.max(-1e12, Math.min(1e12, v)) : undefined;
@@ -2892,8 +2948,10 @@ wss.on('connection',ws=>{
   ws._tokens=40; ws._tokT=Date.now();
 
   // 접속 시: 다른 플레이어 + 서버 몬스터 전체 상태 전송
+  // _seen 은 비워 둔다. welcome 스냅샷이 전체 상태를 주고, 이후 AOI 내 변경/재진입만 델타로 보낸다.
+  // (예전처럼 전부 ver 로 채우면 AOI 밖→안 진입 시 변경 없는 몬스터가 영구히 안 올 수 있음)
   ws._seen=new Map();
-  for(const m of monsters.values()) ws._seen.set(m.id,m.ver);
+  ws._aoiT=0; ws._aoiX=null; ws._aoiZ=null;
   ws.send(JSON.stringify({
     type:'welcome',
     id,
@@ -2930,6 +2988,7 @@ wss.on('connection',ws=>{
       if(Number.isFinite(m.lv)) p.lv=Math.max(1,Math.min(1e6,Math.floor(m.lv)));
       if(typeof m.job==='string'&&/^[a-z_]{0,24}$/.test(m.job)) p.job=m.job;
       if(typeof m.hadesSword==='boolean') p.hadesSword=m.hadesSword;
+      if(typeof m.hadesSwordEquipped==='boolean') p.hadesSwordEquipped=m.hadesSwordEquipped;
       if(typeof m.godUnlocked==='boolean') p.godUnlocked=m.godUnlocked;
       if(Number.isFinite(m.bd)&&m.bd>0) p.baseDmg=Math.min(1e9,m.bd);   // 죽음의 창 데미지 기준(내 1회 공격 데미지)
       const dsx=deathSt(p);
