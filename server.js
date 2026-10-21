@@ -398,6 +398,14 @@ Object.assign(WORLD.MT, {
 Object.assign(WORLD.ZT, {starguard:'nebula',nebulafox:'nebula',astralmage:'nebula',astralguardian:'nebula'});
 WORLD.BOSS.astralguardian=[1290,-1370];
 // ===== /성운 지역 =====
+// ===== 잊혀진 신의 회랑 (신 지역 낡은 동굴 입구 → 중간 난이도 사냥터/던전) =====
+WORLD.ZD.forgotten = [[820,1060,-1480,-1260]];
+Object.assign(WORLD.MT, {
+  fallenapostle:{hp:48000000,dmg:19000,xp:5200000,g:2600000,sp:6.2,reach:3.6,rt:18,sc:2.0,n:6,ag:60,cd:1.6,nm:'타락한 신의 사도'},
+  cloudgolem:{hp:60000000,dmg:19800,xp:5600000,g:2800000,sp:4.2,reach:4.2,rt:20,sc:3.0,n:5,ag:60,cd:1.9,nm:'타락한 구름 골렘'},
+  thunderspirit:{hp:40000000,dmg:19500,xp:4900000,g:2400000,sp:9.0,reach:3.2,rt:16,sc:1.3,n:7,ag:60,cd:1.3,nm:'타락한 뇌전 정령'}
+});
+Object.assign(WORLD.ZT, {fallenapostle:'forgotten',cloudgolem:'forgotten',thunderspirit:'forgotten'});
 
 // ===== /심연 지대 =====
 
