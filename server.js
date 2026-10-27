@@ -1301,7 +1301,7 @@ function userFromReq(req){
     if(item){const k=userFromToken(decodeURIComponent(item.slice('rpg_session='.length)));if(k)return k;}}catch{}
   const h=req.headers['x-rpg-token'];return typeof h==='string'&&h?userFromToken(h):null;
 }
-function requireUser(req,res,next){const u=userFromReq(req);if(!u)return res.status(401).json({error:'로그인이 필요합니다.'});req.userKey=u;next();}
+function requireUser(req,res,next){const u=userFromReq(req);if(!u)return res.status(401).json({error:'로그인이 필요합니다.'});const left=kickCooldownRemaining(u);if(left>0){clearCookie(req,res);return res.status(401).json({error:'킥되어 '+Math.ceil(left/1000)+'초 동안 재접속할 수 없습니다.',kicked:true,remainingMs:left});}req.userKey=u;next();}
 function publicName(key){return db.users[key].username;}
 
 // ===== 관리자 계정 시드 (ADMIN) — Mongo 연결 후 seedAdmin() 호출 =====
@@ -1538,6 +1538,7 @@ app.post('/api/login',authLimiter,async(req,res)=>{
   const {username,password}=req.body||{};
   if(typeof username!=='string'||typeof password!=='string')return res.status(400).json({error:'아이디와 비밀번호를 입력하세요.'});
   const key=usernameKey(username.trim());
+  const cooldownLeft=kickCooldownRemaining(key); if(cooldownLeft>0)return res.status(429).json({error:'킥되어 '+Math.ceil(cooldownLeft/1000)+'초 동안 재접속할 수 없습니다.',cooldown:true,remainingMs:cooldownLeft});
   // 로그인 직전 MongoDB 에서 최신 salt/hash 로드 (비번 재설정 직후 반영)
   let u = await reloadUserAuth(key);
   if(!u) u = db.users[key];
@@ -1557,7 +1558,7 @@ app.post('/api/login',authLimiter,async(req,res)=>{
   res.status(500).json({error:'로그인 처리 중 오류가 발생했습니다.'});
  }
 });
-app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:maintMsg()});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,kickAccess:!!u.kickAccess,token});});
+app.get('/api/me',(req,res)=>{const key=userFromReq(req);if(!key)return res.status(401).json({error:'로그인이 필요합니다.'});const cooldownLeft=kickCooldownRemaining(key);if(cooldownLeft>0){clearCookie(req,res);return res.status(401).json({error:'킥되어 잠시 로그아웃되었습니다. '+Math.ceil(cooldownLeft/1000)+'초 후 다시 로그인하세요.',kicked:true,remainingMs:cooldownLeft});}const u=db.users[key];if(u.banned||(db.bans&&db.bans[key]))return res.status(403).json({error:'차단된 계정입니다.'});if(maintenanceOn()&&!isOwnerKey(key))return res.status(503).json({error:maintMsg()});const token=newToken(key);cookie(req,res,token);if(db.states[key]&&db.states[key].player)ensurePlayer(key);sanitizeAdminFlags(u,key);res.json({death:deathInfo(key),user:publicName(key),state:db.states[key]||null,isAdmin:!!u.isAdmin,isSubAdmin:!!u.isSubAdmin,kickAccess:!!u.kickAccess,token});});
 app.post('/api/save',requireUser,(req,res)=>{
   const state=cleanState(req.body&&req.body.state);
   if(!state)return res.status(400).json({error:'저장 데이터 형식이 올바르지 않습니다.'});
@@ -1749,18 +1750,28 @@ function requireStaff(req,res,next){
   const u=db.users[key];
   if(!u) return res.status(403).json({error:'관리자 권한이 없습니다.'});
   sanitizeAdminFlags(u, key);
-  if(!u.isAdmin && !u.isSubAdmin) return res.status(403).json({error:'관리자 권한이 없습니다.'});
-  req.userKey=key; req.isOwner=!!(u.isAdmin && isOwnerKey(key)); next();
+  const owner=!!(u.isAdmin&&isOwnerKey(key)), operator=!!u.isSubAdmin&&!owner;
+  if(!owner&&!operator) return res.status(403).json({error:'운영진 권한이 필요합니다.'});
+  req.userKey=key; req.isOwner=owner; req.isSubAdmin=operator; req.canAdjustStats=true; next();
+}
+function requireAdminPanel(req,res,next){
+  const key=userFromReq(req);
+  if(!key) return res.status(401).json({error:'로그인이 필요합니다.'});
+  const u=db.users[key]; if(!u) return res.status(403).json({error:'관리자 패널 권한이 없습니다.'});
+  sanitizeAdminFlags(u,key);
+  const owner=!!(u.isAdmin&&isOwnerKey(key)), operator=!!u.isSubAdmin&&!owner, kick=!!u.kickAccess&&!owner;
+  if(!owner&&!operator&&!kick) return res.status(403).json({error:'관리자 패널 권한이 없습니다.'});
+  req.userKey=key; req.isOwner=owner; req.isSubAdmin=operator; req.kickAccess=kick; req.canAdjustStats=owner||operator; next();
 }
 function requireKickStaff(req,res,next){
   const key=userFromReq(req);
   if(!key) return res.status(401).json({error:'로그인이 필요합니다.'});
-  const u=db.users[key];
-  if(!u) return res.status(403).json({error:'킥 권한이 없습니다.'});
+  const u=db.users[key]; if(!u) return res.status(403).json({error:'킥 권한이 없습니다.'});
   sanitizeAdminFlags(u,key);
-  const owner=!!(u.isAdmin&&isOwnerKey(key));
-  if(!owner&&!u.isSubAdmin&&!u.kickAccess) return res.status(403).json({error:'킥 권한이 없습니다.'});
-  req.userKey=key; req.isOwner=owner; req.isSubAdmin=!!u.isSubAdmin&&!owner; req.kickAccess=!!u.kickAccess&&!owner&&!u.isSubAdmin; next();
+  const owner=!!(u.isAdmin&&isOwnerKey(key)), operator=!!u.isSubAdmin&&!owner, kick=!!u.kickAccess&&!owner;
+  // 운영진은 킥 권한도 별도로 임명받아야 한다.
+  if(!owner&&!kick) return res.status(403).json({error:'킥 권한이 없습니다. 운영진도 킥 권한을 별도로 받아야 합니다.'});
+  req.userKey=key; req.isOwner=owner; req.isSubAdmin=operator; req.kickAccess=kick; next();
 }
 const SUBADMIN_MAX_LV = 1000, SUBADMIN_MAX_COIN = 100000000;
 app.post('/api/admin/restart', requireAdmin, async (req,res)=>{
@@ -1828,7 +1839,7 @@ app.post('/api/admin/reset-password', requireAdmin, async (req,res)=>{
     res.status(500).json({error:'저장 실패: '+(e&&e.message?e.message:'unknown')});
   }
 });
-app.get('/api/admin/users', requireKickStaff, (req,res)=>{
+app.get('/api/admin/users', requireAdminPanel, (req,res)=>{
   const list=[];
   for(const [key,u] of Object.entries(db.users)){
     const st=db.states[key]&&db.states[key].player;
@@ -1836,11 +1847,11 @@ app.get('/api/admin/users', requireKickStaff, (req,res)=>{
       key, username:u.username, isAdmin:!!u.isAdmin, isSubAdmin:!!u.isSubAdmin, kickAccess:!!u.kickAccess,
       banned:!!(u.banned||(db.bans&&db.bans[key])),
       createdAt:u.createdAt||0,
-      ...(req.isOwner ? {lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0} : {})
+      ...((req.isOwner||req.isSubAdmin) ? {lv: st?st.lv:1, coin: st?st.coin:0, xp: st?st.xp:0} : {})
     });
   }
   list.sort((a,b)=> (b.createdAt||0)-(a.createdAt||0));
-  res.json({users:list,currentUser:db.users[req.userKey]?.username||'',role:req.isOwner?'owner':req.isSubAdmin?'operator':'kick'});
+  res.json({users:list,currentUser:db.users[req.userKey]?.username||'',role:req.isOwner?'owner':(req.isSubAdmin?(req.kickAccess?'operator-kick':'operator'):'kick'),canAdjustStats:!!req.canAdjustStats,canKick:!!(req.isOwner||req.kickAccess)});
 });
 // 최고 관리자만 계정별 킥 권한을 해방/해제할 수 있다.
 app.post('/api/admin/kick-access', requireAdmin, async (req,res)=>{
@@ -1867,6 +1878,7 @@ app.post('/api/admin/kick', requireKickStaff, (req,res)=>{
   if(key===req.userKey) return res.status(400).json({error:'자기 자신은 킥할 수 없습니다.'});
   if(isOwnerKey(key)||target.isAdmin) return res.status(403).json({error:'최고 관리자는 킥할 수 없습니다.'});
   if(!req.isOwner && (target.isSubAdmin||target.kickAccess)) return res.status(403).json({error:'운영진 또는 킥 권한 계정은 최고 관리자만 킥할 수 있습니다.'});
+  kickCooldowns.set(key,Date.now()+10000);
   let kicked=0;
   for(const ws of wss.clients){
     if(ws._userKey!==key||ws.readyState!==WebSocket.OPEN) continue;
@@ -1874,7 +1886,7 @@ app.post('/api/admin/kick', requireKickStaff, (req,res)=>{
     try{ws.send(JSON.stringify({type:'kicked',reason:'관리자에 의해 서버에서 퇴장되었습니다.'}));}catch{}
     try{ws.close(4001,'kicked by admin');}catch{}
   }
-  res.json({ok:true,username:target.username,kicked,online:kicked>0});
+  res.json({ok:true,username:target.username,kicked,online:kicked>0,cooldownSeconds:10});
 });
 
 app.post('/api/admin/ban', requireAdmin, (req,res)=>{
@@ -1890,19 +1902,15 @@ app.post('/api/admin/ban', requireAdmin, (req,res)=>{
   try{persist(); res.json({ok:true, username:u.username, banned:!!u.banned});}
   catch(e){res.status(500).json({error:'저장 실패'});}
 });
-app.post('/api/admin/set-level', requireAdmin, (req,res)=>{
+app.post('/api/admin/set-level', requireStaff, (req,res)=>{
   const {username, level} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const lv=Math.floor(Number(level));
-  if(!Number.isFinite(lv)||lv<1||lv>1e6) return res.status(400).json({error:'레벨은 1 이상의 정수입니다.'});
+  if(!Number.isFinite(lv)||lv<1||lv>(req.isOwner?1e6:SUBADMIN_MAX_LV)) return res.status(400).json({error:req.isOwner?'레벨은 1 이상의 정수입니다.':'운영진은 레벨을 1~1000 사이에서만 설정할 수 있습니다.'});
   const key=usernameKey(username);
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
   const p=ensurePlayer(key);
-  if(!req.isOwner){
-    if(db.users[key].isAdmin) return res.status(403).json({error:'최고 관리자는 변경할 수 없습니다.'});
-    const cur=Math.max(1,p.lv|0);
-    if(lv<cur||lv-cur>SUBADMIN_MAX_LV) return res.status(403).json({error:'어드민은 한 번에 최대 '+SUBADMIN_MAX_LV+'레벨까지만 올릴 수 있습니다. (현재 Lv'+cur+')'});
-  }
+  if(!req.isOwner && (isOwnerKey(key)||db.users[key].isAdmin)) return res.status(403).json({error:'최고 관리자는 변경할 수 없습니다.'});
   p.lv=lv;
   p.xp=0;
   p.nx=nxForLevel(lv);
@@ -1963,19 +1971,18 @@ app.post('/api/admin/set-rebirth', requireAdmin, (req,res)=>{
   if(rb<DEATH_REBIRTH) pushDeathState(key);
   res.json({ok:true, username:db.users[key].username, rebirth:p.rebirth, job:p.job, deathAwakened:first});
 });
-app.post('/api/admin/give-coin', requireAdmin, (req,res)=>{
+app.post('/api/admin/give-coin', requireStaff, (req,res)=>{
   const {username, amount} = req.body||{};
   if(typeof username!=='string') return res.status(400).json({error:'아이디가 필요합니다.'});
   const amt=Math.floor(Number(amount));
   if(!Number.isFinite(amt)||amt===0||Math.abs(amt)>1e9) return res.status(400).json({error:'코인 수량이 올바르지 않습니다.'});
   const key=usernameKey(username);
   if(!db.users[key]) return res.status(404).json({error:'사용자를 찾을 수 없습니다.'});
-  if(!req.isOwner){
-    if(amt<0||amt>SUBADMIN_MAX_COIN) return res.status(403).json({error:'어드민은 한 번에 최대 1억 코인까지만 지급할 수 있습니다.'});
-    if(db.users[key].isAdmin) return res.status(403).json({error:'최고 관리자는 변경할 수 없습니다.'});
-  }
+  if(!req.isOwner && (isOwnerKey(key)||db.users[key].isAdmin)) return res.status(403).json({error:'최고 관리자는 변경할 수 없습니다.'});
   const p=ensurePlayer(key);
-  p.coin=Math.max(0, Math.floor((p.coin||0)+amt));
+  const nextCoin=Math.max(0,Math.floor((p.coin||0)+amt));
+  if(!req.isOwner && (Math.abs(amt)>SUBADMIN_MAX_COIN || nextCoin>SUBADMIN_MAX_COIN)) return res.status(403).json({error:'운영진은 코인 잔액과 조정량을 각각 1억 이하로만 설정할 수 있습니다.'});
+  p.coin=nextCoin;
   db.states[key].savedAt=Date.now();
   try{persist();}catch(e){}
   pushAdminStat(key, {coin:p.coin, lv:p.lv, xp:p.xp, nx:p.nx, hp:p.hp, mhp:p.mhp});
@@ -2919,6 +2926,9 @@ app.use((err,_req,res,_next)=>{if(res.headersSent)return;res.status(400).json({e
 const wss=new WebSocketServer({noServer:true,maxPayload:8192,perMessageDeflate:false});
 let server = null;
 const players=new Map(), socketsByIp=new Map(), wsById=new Map();
+// 킥된 계정은 10초간 HTTP 로그인과 WebSocket 재접속을 모두 차단한다.
+const kickCooldowns = new Map();
+function kickCooldownRemaining(key){ const until=kickCooldowns.get(String(key||'')); if(!until)return 0; const left=until-Date.now(); if(left<=0){kickCooldowns.delete(String(key||''));return 0;} return left; }
 
 // ===== 거래 모듈 (trade.js) =====
 const trade = require('./trade')({
@@ -2963,6 +2973,11 @@ function attachUpgrade(server){server.on('upgrade',(req,socket,head)=>{
     socketsByIp.set(ip,(socketsByIp.get(ip)||0)+1);
     // 로그인 닉네임을 멀티플레이 이름으로 사용
     const auth=userFromWsReq(req);
+    if(auth){ const left=kickCooldownRemaining(auth.key); if(left>0){
+      const n=(socketsByIp.get(ip)||1)-1; if(n>0)socketsByIp.set(ip,n); else socketsByIp.delete(ip);
+      console.warn('[ws reject] kick cooldown', {username:auth.username, remainingMs:left});
+      socket.write('HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\n\r\n'); socket.destroy(); return;
+    }}
     if(auth && db.users[auth.key] && (db.users[auth.key].banned || (db.bans&&db.bans[auth.key]))){
       const n=(socketsByIp.get(ip)||1)-1; if(n>0)socketsByIp.set(ip,n); else socketsByIp.delete(ip);
       console.warn('[ws reject] banned account', auth.username || auth.key);
